@@ -25,7 +25,7 @@ N_FRAMES = exact_div(N_SAMPLES,  HOP_LENGTH) # 1500
 
 FRAME_PER_SECOND = exact_div(SAMPLE_RATE, HOP_LENGTH)
 NUM_FREQ_BINS = exact_div(N_FFT, 2) + 1
-FREQ_BIN_RESOLUTION = SAMPLE_RATE / N_FFT
+FREQ_BIN_RESOLUTION = SAMPLE_RATE / N_FFT  # 125 Hz
 
 TOP_DB = 80
 AMIN = 1e-10
@@ -57,7 +57,7 @@ def spectrogram(waveform: torch.Tensor, device: Optional[Union[str, torch.device
         device: device to run the computation
 
     Return:
-        spectrogram: (F, T) in range [max-80, max]
+        spectrogram: (F, T) in range [-TOP_DB, 0]
     """
 
     window = torch.hann_window(N_FFT).to(device=device)
@@ -75,12 +75,13 @@ def spectrogram(waveform: torch.Tensor, device: Optional[Union[str, torch.device
         onesided=True,
     )
     # spec = F.amplitude_to_DB(spec, multiplier=10, amin=AMIN, db_multiplier = 1, top_db = TOP_DB)
+    # bound spect to [-TOP_DB, 0]
     spec = F.amplitude_to_DB(spec, multiplier=10, amin=AMIN, db_multiplier = torch.max(spec).log10(), top_db = TOP_DB)
     spec = spec[..., :-1].squeeze(0) # drop last frame
-    spec = torch.flipud(spec) # flip frequency axis
-    return spec # (F, T) 
+    spec = torch.flipud(spec) # flip frequency axis, low freq at the bottom
+    return spec # (F, T)  [-TOP_DB, 0]
 
-def cut_sepc(spec: torch.Tensor, overlap: float = 0)-> dict[int, np.ndarray]:
+def cut_sepc(spec: torch.Tensor, overlap: float)-> dict[int, np.ndarray]:
     """Segment spectrogram into chunks/segments with/without overlap
     
     Args:

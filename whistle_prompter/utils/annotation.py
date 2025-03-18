@@ -77,12 +77,14 @@ def tf_to_pix(
     """
     times = traj[:, 0]
     freqs = traj[:, 1]
-    columns = times * FRAME_PER_SECOND
+    columns = times * FRAME_PER_SECOND + 0.5
     row_top = freqs / FREQ_BIN_RESOLUTION
     rows = NUM_FREQ_BINS - row_top
-    rows = np.round(rows)
-    columns = np.round(columns)
-    return  np.unique(np.stack([columns, rows], axis=-1), axis=0)  # float piexel coordinates
+    rows = np.round(rows - 0.5).astype(int)
+    columns = np.round(columns).astype(int)
+    coords = np.unique(np.stack([columns, rows], axis=-1), axis=0) # remove duplicate points
+    valid_mask  = (coords[:, 0] >= 0) & (coords[:, 0] < N_FRAMES) & (coords[:, 1] >= 0) & (coords[:, 1] < NUM_FREQ_BINS)
+    return coords[valid_mask]
 
 
 def polyline_to_polygon(traj: np.ndarray, width: float = 3)-> List[float]:
@@ -96,7 +98,7 @@ def polyline_to_polygon(traj: np.ndarray, width: float = 3)-> List[float]:
         coco segmentation format [x1, y1, x2, y2, ...]
     """
     if len(traj) == 0:
-        raise ValueError("Empty trajectory provided")
+        return False
     if len(traj) == 1:
         # For single point, create a circular polygon
         point = Point(traj[0])
@@ -122,10 +124,10 @@ def polyline_to_polygon(traj: np.ndarray, width: float = 3)-> List[float]:
     return coco_coords.ravel().tolist()  # coco segmentation format [x1, y1, x2, y2, ...]
 
 def polygon_to_box(polygon: List[float]):
-    """Convert polygon to bounding box
+    """Convert polygon to bounding box in format xywh
     
     Args:
-        polygon: coco segmentation format [x1, y1, x2, y2, ...]
+        polygon: coco segmentation format [x1, y1, w, h]
     """
     x = polygon[::2]
     y = polygon[1::2]
@@ -134,8 +136,28 @@ def polygon_to_box(polygon: List[float]):
     return [x1, y1, x2 - x1, y2 - y1]  # [x, y, w, h]
 
 
+def xyxy2xywh(bbox: list) -> list:
+    """Convert ``xyxy`` style bounding boxes to ``xywh`` style for COCO
+    evaluation.
+
+    Args:
+        bbox (numpy.ndarray): The bounding boxes, shape (4, ), in
+            ``xyxy`` order.
+
+    Returns:
+        list[float]: The converted bounding boxes, in ``xywh`` order.
+    """
+
+    return [
+        bbox[0],
+        bbox[1],
+        bbox[2] - bbox[0],
+        bbox[3] - bbox[1],
+    ]
+
+
 def get_segment_annotation(trajs: List[np.array], start_frame:int):
-    """Get the annotations within the segment range
+    """Get the part of annotations within the segment range
     
     Args:
         trajs: list of contours [(time(s), frequency(Hz))]: [(num_points, 2),...]
