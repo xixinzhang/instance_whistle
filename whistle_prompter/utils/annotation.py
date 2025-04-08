@@ -66,6 +66,8 @@ def get_dense_annotation(traj: np.ndarray, dense_factor: int = 10):
 
 def tf_to_pix(
     traj: np.ndarray,
+    num_freq_bins: int = NUM_FREQ_BINS,
+    width: int = N_FRAMES,
 ):
     """Convert time-frequency coordinates to pixel coordinates within a single spectrogram segment
 
@@ -79,11 +81,11 @@ def tf_to_pix(
     freqs = traj[:, 1]
     columns = times * FRAME_PER_SECOND + 0.5
     row_top = freqs / FREQ_BIN_RESOLUTION
-    rows = NUM_FREQ_BINS - row_top
+    rows = num_freq_bins - row_top
     rows = np.round(rows - 0.5).astype(int)
     columns = np.round(columns).astype(int)
     coords = np.unique(np.stack([columns, rows], axis=-1), axis=0) # remove duplicate points
-    valid_mask  = (coords[:, 0] >= 0) & (coords[:, 0] < N_FRAMES) & (coords[:, 1] >= 0) & (coords[:, 1] < NUM_FREQ_BINS)
+    valid_mask  = (coords[:, 0] >= 0) & (coords[:, 0] < width) & (coords[:, 1] >= 0) & (coords[:, 1] < num_freq_bins)
     return coords[valid_mask]
 
 

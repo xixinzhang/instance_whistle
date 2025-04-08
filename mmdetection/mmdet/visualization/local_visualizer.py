@@ -123,50 +123,50 @@ class DetLocalVisualizer(Visualizer):
         """
         self.set_image(image)
 
-        if 'bboxes' in instances and instances.bboxes.sum() > 0:
-            bboxes = instances.bboxes
-            labels = instances.labels
+        # if 'bboxes' in instances and instances.bboxes.sum() > 0:
+        #     bboxes = instances.bboxes
+        #     labels = instances.labels
 
-            max_label = int(max(labels) if len(labels) > 0 else 0)
-            text_palette = get_palette(self.text_color, max_label + 1)
-            text_colors = [text_palette[label] for label in labels]
+        #     max_label = int(max(labels) if len(labels) > 0 else 0)
+        #     text_palette = get_palette(self.text_color, max_label + 1)
+        #     text_colors = [text_palette[label] for label in labels]
 
-            bbox_color = palette if self.bbox_color is None \
-                else self.bbox_color
-            bbox_palette = get_palette(bbox_color, max_label + 1)
-            colors = [bbox_palette[label] for label in labels]
-            self.draw_bboxes(
-                bboxes,
-                edge_colors=colors,
-                alpha=self.alpha,
-                line_widths=self.line_width)
+        #     bbox_color = palette if self.bbox_color is None \
+        #         else self.bbox_color
+        #     bbox_palette = get_palette(bbox_color, max_label + 1)
+        #     colors = [bbox_palette[label] for label in labels]
+        #     self.draw_bboxes(
+        #         bboxes,
+        #         edge_colors=colors,
+        #         alpha=self.alpha,
+        #         line_widths=self.line_width)
 
-            positions = bboxes[:, :2] + self.line_width
-            areas = (bboxes[:, 3] - bboxes[:, 1]) * (
-                bboxes[:, 2] - bboxes[:, 0])
-            scales = _get_adaptive_scales(areas)
+        #     positions = bboxes[:, :2] + self.line_width
+        #     areas = (bboxes[:, 3] - bboxes[:, 1]) * (
+        #         bboxes[:, 2] - bboxes[:, 0])
+        #     scales = _get_adaptive_scales(areas)
 
-            for i, (pos, label) in enumerate(zip(positions, labels)):
-                if 'label_names' in instances:
-                    label_text = instances.label_names[i]
-                else:
-                    label_text = classes[
-                        label] if classes is not None else f'class {label}'
-                if 'scores' in instances:
-                    score = round(float(instances.scores[i]) * 100, 1)
-                    label_text += f': {score}'
+        #     for i, (pos, label) in enumerate(zip(positions, labels)):
+        #         if 'label_names' in instances:
+        #             label_text = instances.label_names[i]
+        #         else:
+        #             label_text = classes[
+        #                 label] if classes is not None else f'class {label}'
+        #         if 'scores' in instances:
+        #             score = round(float(instances.scores[i]) * 100, 1)
+        #             label_text += f': {score}'
 
-                self.draw_texts(
-                    label_text,
-                    pos,
-                    colors=text_colors[i],
-                    font_sizes=int(13 * scales[i]),
-                    bboxes=[{
-                        'facecolor': 'black',
-                        'alpha': 0.8,
-                        'pad': 0.7,
-                        'edgecolor': 'none'
-                    }])
+        #         self.draw_texts(
+        #             label_text,
+        #             pos,
+        #             colors=text_colors[i],
+        #             font_sizes=int(13 * scales[i]),
+        #             bboxes=[{
+        #                 'facecolor': 'black',
+        #                 'alpha': 0.8,
+        #                 'pad': 0.7,
+        #                 'edgecolor': 'none'
+        #             }])
 
         if 'masks' in instances:
             labels = instances.labels
@@ -182,7 +182,8 @@ class DetLocalVisualizer(Visualizer):
             mask_color = palette if self.mask_color is None \
                 else self.mask_color
             mask_palette = get_palette(mask_color, max_label + 1)
-            colors = [jitter_color(mask_palette[label]) for label in labels]
+            # colors = [jitter_color(mask_palette[label]) for label in labels]
+            colors = [((np.random.random(3)*0.6+0.4)*255).astype(np.uint8) for label in labels]
             text_palette = get_palette(self.text_color, max_label + 1)
             text_colors = [text_palette[label] for label in labels]
 
@@ -190,12 +191,10 @@ class DetLocalVisualizer(Visualizer):
             for i, mask in enumerate(masks):
                 contours, _ = bitmap_to_polygon(mask)
                 polygons.extend(contours)
-            self.draw_polygons(polygons, edge_colors='w', alpha=self.alpha)
+            # self.draw_polygons(polygons, edge_colors='w', alpha=self.alpha)
             self.draw_binary_masks(masks, colors=colors, alphas=self.alpha)
 
-            if len(labels) > 0 and \
-                    ('bboxes' not in instances or
-                     instances.bboxes.sum() == 0):
+            if len(labels) > 0:
                 # instances.bboxes.sum()==0 represent dummy bboxes.
                 # A typical example of SOLO does not exist bbox branch.
                 areas = []

@@ -5,6 +5,7 @@ import random
 import shutil
 from pathlib import Path
 from typing import List, Optional
+import pycocotools.mask as maskUtils
 
 import cv2
 import numpy as np
@@ -80,7 +81,7 @@ def save_specs_img(segments_dict:dict[str, dict[int, np.ndarray]], save_dir:str,
                     image_id=img_cnt,
                     category_id=1,
                     segmentation = [traj_plg],
-                    area = bbox[2]*bbox[3],
+                    area = maskUtils.area([traj_plg]),
                     bbox = bbox,
                     iscrowd = 0
                 ))
