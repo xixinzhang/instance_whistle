@@ -203,7 +203,6 @@ class WhistleMetric(BaseMetric):
                     continue
                 whistles_json.append(data)
 
-        rprint(f'Num of detected whistles: {len(whistles_json)} filtered by score {filter_dt}')
 
         # TODO: dump whistles
 
@@ -276,12 +275,6 @@ class WhistleMetric(BaseMetric):
 
         # add img_id in same audio file
         if self._coco_api is not None:
-            audio_to_img = defaultdict(list)
-            audio_to_frame = defaultdict(list)
-            for id, img in self._coco_api.imgs.items():
-                audio_to_img[img['audio_filename']].append(id)
-                audio_to_frame[img['start_frame']].append(id)
-            
             gt_per_img = []
             for id, ann in tqdm(self._coco_api.anns.items(), desc='Convert gt to whistle'):
                 gt_per_img.append({
@@ -291,7 +284,6 @@ class WhistleMetric(BaseMetric):
                     'whistle': mask_to_whistle(
                         self._coco_api.annToMask(ann))
             })
-            rprint(f'Num of gt whistles: {len(gt_per_img)} from {len(results)} imgs')
             
 
         # handle lazy init
@@ -302,7 +294,10 @@ class WhistleMetric(BaseMetric):
             self.img_ids = self._coco_api.get_img_ids()
 
         # convert predictions to coco format and dump to json file
-        dt_per_img = self.results2whistles(preds, filter_dt=0.1)
+        filter_dt = 0.1
+        dt_per_img = self.results2whistles(preds, filter_dt=filter_dt)
+        rprint(f'Num of detected whistles: {len(dt_per_img)} filtered by score {filter_dt}')
+        rprint(f'Num of gt whistles: {len(gt_per_img)} from {len(results)} imgs')
 
         w = results[0][0]['width']
         img_to_dts = defaultdict(list)
@@ -592,7 +587,11 @@ def mask_to_whistle(mask, method='bresenham'):
     """
     mask = mask.astype(np.uint8)
     skeleton = skeletonize(mask).astype(np.uint8)
-    whistle = np.array(np.nonzero(skeleton)).T # [(y, x]
+    border_mask = np.zeros_like(mask, dtype=bool)
+    border_mask[:, [0, -1]] = True
+    border_pixels = mask & border_mask
+    skeleton = skeleton | border_pixels
+    whistle = np.array(np.nonzero(skeleton)).T # [N x (y, x)]
     whistle = np.flip(whistle, axis=1)  # [(x, y)]
     whistle = np.unique(whistle, axis=0)  # remove duplicate points
     whistle = whistle[whistle[:, 0].argsort()]
@@ -630,6 +629,7 @@ def mask_to_whistle(mask, method='bresenham'):
     unique_whistle = np.column_stack((unique_x, averaged_y))
 
     return unique_whistle
+
 
 def gather_whistles(coco_gt:COCO, coco_dt:COCO, filter_dt=0.95, valid_gt=False, root_dir=None, debug=False):
     """gather per image whistles from instance masks"""

@@ -208,10 +208,12 @@ if __name__ == "__main__":
     for s in classes[:2]:
         filenames.extend(glob.glob(os.path.join(root_dir, s, "*.wav")))
 
-    filenames = filenames[:1]
-    
+    # filenames = filenames[:1]
     filenames = '/home/xzhang3906/storage/DCLDE/whale_whistle/bottlenose/palmyra092007FS192-070924-205305.wav'
-    
+    # with open("data/meta.json") as f:
+    #     meta = json.load(f)
+    # filenames = [f'data/audio/{f}.wav' for f in meta['data']["test"]]
+
     segments_dict = audios_to_segments_dict(filenames)
     print(segments_dict.keys())
     save_specs_img(segments_dict, args.raw_spec, cmap=args.cmap, line_width=args.line_width, filter_empty_gt=True)

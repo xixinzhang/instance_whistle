@@ -1,6 +1,7 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import datetime
 import itertools
+import json
 import os.path as osp
 import tempfile
 from collections import OrderedDict, defaultdict, deque
@@ -155,7 +156,7 @@ class WhistleMetric2(BaseMetric):
         self.img_ids = None
 
 
-    def results2whistles(self, results: Sequence[dict],
+    def results2whistles(self, results: Sequence[dict],image_ids,
                     filter_dt = 0.9) -> dict:
         """Dump the detection results to a COCO style json file.
 
@@ -181,6 +182,8 @@ class WhistleMetric2(BaseMetric):
         whistles_json = [] if 'masks' in results[0] else None
         for idx, result in enumerate(tqdm(results, desc='Convert dt to whistle')):
             image_id = result.get('img_id', idx)
+            if image_id not in image_ids:
+                continue
             labels = result['labels']
             scores = result['scores']
 
@@ -203,7 +206,6 @@ class WhistleMetric2(BaseMetric):
                     continue
                 whistles_json.append(data)
 
-        rprint(f'Num of detected whistles: {len(whistles_json)} filtered by score {filter_dt}')
 
         # TODO: dump whistles
 
@@ -274,25 +276,40 @@ class WhistleMetric2(BaseMetric):
         # split gt and prediction list
         _, preds = zip(*results)
 
+        stems = json.load(open('/home/xzhang3906/Desktop/projects/sam_whistle/data/cross_species/meta.json'))
+        stems = stems['test']
+
+        # DEBUG: 
+        stems = ['palmyra092007FS192-070924-205305']
+
         # add img_id in same audio file
-        if self._coco_api is not None:
-            audio_to_img = defaultdict(list)
-            audio_to_frame = defaultdict(list)
-            for id, img in self._coco_api.imgs.items():
-                audio_to_img[img['audio_filename']].append(id)
-                audio_to_frame[img['start_frame']].append(id)
-            
-            gt_per_img = []
-            for id, ann in tqdm(self._coco_api.anns.items(), desc='Convert gt to whistle'):
-                gt_per_img.append({
-                    'image_id': ann['image_id'],
-                    'score': 1.0,
-                    'category_id': ann['category_id'],
-                    'whistle': mask_to_whistle(
-                        self._coco_api.annToMask(ann))
-            })
-            rprint(f'Num of gt whistles: {len(gt_per_img)} from {len(results)} imgs')
-            
+        audio_to_img = defaultdict(list)
+        audio_to_frame = defaultdict(list)
+
+        for id, img in self._coco_api.imgs.items():
+            audio_to_img[img['audio_filename']].append(id)
+            audio_to_frame[img['start_frame']].append(id)
+
+        def get_img_frame():
+            pass
+        
+        image_ids = []
+        for stem in stems:
+            image_ids.extend(audio_to_img[stem])
+        
+        ann_ids = self._coco_api.getAnnIds(imgIds=image_ids)
+        eval_anns = self._coco_api.loadAnns(ann_ids)
+
+        gt_per_img = []
+        for ann in tqdm(eval_anns, desc='Convert gt to whistle'):
+            gt_per_img.append({
+                'image_id': ann['image_id'],
+                'score': 1.0,
+                'category_id': ann['category_id'],
+                'whistle': mask_to_whistle(
+                    self._coco_api.annToMask(ann))
+        })
+        
 
         # handle lazy init
         if self.cat_ids is None:
@@ -302,7 +319,13 @@ class WhistleMetric2(BaseMetric):
             self.img_ids = self._coco_api.get_img_ids()
 
         # convert predictions to coco format and dump to json file
-        dt_per_img = self.results2whistles(preds, filter_dt=0.1)
+        filter_dt = 0.95
+        dt_per_img = self.results2whistles(preds, image_ids = image_ids, filter_dt=filter_dt)
+        rprint(f'Num of detected whistles: {len(dt_per_img)} filtered by score {filter_dt}')
+        rprint(f'Num of gt whistles: {len(gt_per_img)} from {len(results)} imgs')
+
+        # TODO: stitch the whistles cutted
+        # TODO: output the whistle to silbido
 
         w = results[0][0]['width']
         img_to_dts = defaultdict(list)
@@ -326,12 +349,8 @@ class WhistleMetric2(BaseMetric):
                 'img_id': img_id,
             }
 
-
         eval_results = OrderedDict()
-        
 
-        metric = self.metrics[0]
-        logger.info(f'Evaluating {metric}...')
         res = accumulate_wistle_results(img_to_whistles, valid_gt=True)
         summary = sumerize_whisle_results(res)
         rprint(summary)
@@ -592,6 +611,10 @@ def mask_to_whistle(mask, method='bresenham'):
     """
     mask = mask.astype(np.uint8)
     skeleton = skeletonize(mask).astype(np.uint8)
+    border_mask = np.zeros_like(mask, dtype=bool)
+    border_mask[:, [0, -1]] = True
+    border_pixels = mask & border_mask
+    skeleton = skeleton | border_pixels
     whistle = np.array(np.nonzero(skeleton)).T # [(y, x]
     whistle = np.flip(whistle, axis=1)  # [(x, y)]
     whistle = np.unique(whistle, axis=0)  # remove duplicate points
