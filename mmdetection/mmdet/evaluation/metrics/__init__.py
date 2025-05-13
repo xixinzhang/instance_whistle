@@ -23,6 +23,8 @@ from .reid_metric import ReIDMetrics
 from .semseg_metric import SemSegMetric
 from .voc_metric import VOCMetric
 from .youtube_vis_metric import YouTubeVISMetric
+from .whistle_metric import WhistleMetric
+from .whistle_metric2 import WhistleMetric2
 
 __all__ = [
     'CityScapesMetric', 'CocoMetric', 'CocoPanopticMetric', 'OpenImagesMetric',
@@ -31,5 +33,5 @@ __all__ = [
     'MOTChallengeMetric', 'CocoVideoMetric', 'ReIDMetrics', 'YouTubeVISMetric',
     'COCOCaptionMetric', 'SemSegMetric', 'RefSegMetric', 'RefExpMetric',
     'gRefCOCOMetric', 'DODCocoMetric', 'DumpODVGResults', 'Flickr30kMetric',
-    'OVCocoMetric'
+    'OVCocoMetric', 'WhistleMetric', 'WhistleMetric2'
 ]

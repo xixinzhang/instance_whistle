@@ -1,3 +1,4 @@
+import glob
 import json
 import os
 import os.path as osp
@@ -38,8 +39,9 @@ def audios_to_segments_dict(filenames:List[str], overlap:float = 0)-> dict[str, 
         waveform = utils.load_audio(f)
         spec = utils.spectrogram(waveform)
         stem = f.split("/")[-1].split(".")[0]
+        dirname = f.split("/")[-2]
         normalized_spec = utils.normalize_spec_img(spec)
-        segments_dict.update({stem: utils.cut_sepc(normalized_spec, overlap=overlap)}) # {stem: {start_frame: segment}}
+        segments_dict.update({f'{dirname}/{stem}': utils.cut_sepc(normalized_spec, overlap=overlap)}) # {stem: {start_frame: segment}}
     return segments_dict
 
 def save_specs_img(segments_dict:dict[str, dict[int, np.ndarray]], save_dir:str, line_width, cmap:Optional[str], filter_empty_gt:bool = True):
@@ -59,10 +61,11 @@ def save_specs_img(segments_dict:dict[str, dict[int, np.ndarray]], save_dir:str,
         shutil.rmtree(save_dir)
     os.makedirs(osp.join(save_dir, 'data'), exist_ok=True)
 
-    for stem, segments in segments_dict.items():
+    for name, segments in segments_dict.items():
+        dirname, stem = name.split("/")
         print(f"Saving {stem} to {save_dir}")
 
-        bin_file = Path(f'data/raw_anno/{stem}.bin')
+        bin_file = Path(f'data/whale_whistle/{dirname}/{stem}.bin')
         annos = utils.load_annotation(bin_file)
         for start_frame, segment in segments.items():
             # annotations
@@ -81,7 +84,7 @@ def save_specs_img(segments_dict:dict[str, dict[int, np.ndarray]], save_dir:str,
                     image_id=img_cnt,
                     category_id=1,
                     segmentation = [traj_plg],
-                    area = maskUtils.area([traj_plg]),
+                    area=bbox[2] * bbox[3],
                     bbox = bbox,
                     iscrowd = 0
                 ))
@@ -190,18 +193,28 @@ if __name__ == "__main__":
     parser.add_argument("--line_width", type=float, default=3)
     parser.add_argument("--overlap", type=float, default=0)
     parser.add_argument("--raw_spec", type = str, default="data/spec_img")
-    parser.add_argument("--output_dir", type=str, default="data/spec_coco")
+    parser.add_argument("--output_dir", type=str, default="data/coco")
     args = parser.parse_args()
 
-    with open("data/meta.json") as f:
-        meta = json.load(f)
-    filenames = []
-    for _, stems in meta["data"].items():
-        filenames.extend([f"data/audio/{stem}.wav" for stem in stems])
+    # with open("data/meta.json") as f:
+    #     meta = json.load(f)
+    # filenames = []
+    # for _, stems in meta["data"].items():
+    #     filenames.extend([f"data/audio/{stem}.wav" for stem in stems])
 
+    filenames = []
+    root_dir = os.path.expanduser("~/storage/DCLDE/whale_whistle")
+    classes = ['bottlenose', 'common', 'melon-headed', 'spinner']
+    for s in classes[:2]:
+        filenames.extend(glob.glob(os.path.join(root_dir, s, "*.wav")))
+
+    filenames = filenames[:1]
+    
+    filenames = '/home/xzhang3906/storage/DCLDE/whale_whistle/bottlenose/palmyra092007FS192-070924-205305.wav'
+    
     segments_dict = audios_to_segments_dict(filenames)
     print(segments_dict.keys())
-    save_specs_img(segments_dict, args.raw_spec, cmap=args.cmap, line_width=args.line_width)
-    split_specs_dataset(f"{args.raw_spec}/labels.json", f'{args.raw_spec}/data', args.output_dir)
+    save_specs_img(segments_dict, args.raw_spec, cmap=args.cmap, line_width=args.line_width, filter_empty_gt=True)
+    # split_specs_dataset(f"{args.raw_spec}/labels.json", f'{args.raw_spec}/data', args.output_dir)
 
     

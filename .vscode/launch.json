@@ -5,6 +5,19 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "mask2former test Debug",
+            "type": "debugpy",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/mmdetection",
+            "program": "tools/test.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "../configs/mask2former_r50_8xb2-lsj-50e_whistle_cross.py",
+                "work_dirs/mask2former_r50_8xb2-lsj-50e_whistle_cross/iter_368750.pth"
+            ],
+        },
+        {
             "name": "Visualize results",
             "type": "debugpy",
             "request": "launch",
@@ -18,7 +31,6 @@
                 "work_dirs/mask-rcnn_r50-caffe_fpn_ms-poly-3x_coco/"
             ]
         },
-        
         {
             "name": "Browse data",
             "type": "debugpy",
