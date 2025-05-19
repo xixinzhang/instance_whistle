@@ -305,8 +305,7 @@ class WhistleMetric2(BaseMetric):
             for i, (sf, img_id) in enumerate(zip(sorted_frames, img_ids)):
                 ann_ids = self._coco_api.getAnnIds(imgIds=img_id)
                 anns = self._coco_api.loadAnns(ann_ids)
-                whistle_list = [{ann['id']: mask_to_whistle(self._coco_api.annToMask(ann))} for ann in anns]
-                coco_whistles[sf] = whistle_list  # {start_frame: [{ann_id: whistle}]}
+                coco_whistles[sf] = {ann['id']: mask_to_whistle(self._coco_api.annToMask(ann)) for ann in anns}  # {start_frame: {ann_id: whistle} ...}
 
             # Merge whistles that are cut at frame boundaries
             merged_whistles = []
@@ -328,73 +327,70 @@ class WhistleMetric2(BaseMetric):
                     next_whistles = coco_whistles[next_frame]
                     
                     # Find whistles that might be cut at right edge of current frame
-                    for c_idx, c_whistle_dict in enumerate(current_whistles):
-                        for c_id, c_whistle in c_whistle_dict.items():
-                            # Skip if this whistle has already been merged
-                            if c_id in merged_ids:
-                                continue
-                                
-                            # Check if whistle is cut at right edge (x values close to frame width)
-                            if np.any(c_whistle[:, 0] >= frame_width - 1):  # Within 1ms of edge
-                                # Look for matching whistles in next frame cut at left edge
-                                for n_idx, n_whistle_dict in enumerate(next_whistles):
-                                    for n_id, n_whistle in n_whistle_dict.items():
-                                        # Skip if this whistle has already been merged
-                                        if n_id in merged_ids:
-                                            continue
-                                            
-                                        # Check if whistle starts at left edge
-                                        if np.any(n_whistle[:, 0] < 1):  # Within 1ms of edge
-                                            # Get rightmost points of current whistle
-                                            c_right_points = c_whistle[c_whistle[:, 0] >= frame_width - 1]
-                                            # Get leftmost points of next whistle
-                                            n_left_points = n_whistle[n_whistle[:, 0] < 1]
-                                            
-                                            # Check if y-coordinates are similar (frequency alignment within 250Hz)
-                                            # Since each pixel is 125Hz, a difference of 2 pixels = 250Hz
-                                            c_avg_y = np.mean(c_right_points[:, 1])
-                                            n_avg_y = np.mean(n_left_points[:, 1])
-                                            
-                                            if abs(c_avg_y - n_avg_y) <= 2:  # 2 pixels = 250Hz threshold
-                                                # Merge the whistles
-                                                # Adjust x-coordinates of next whistle by adding frame width (300ms)
-                                                n_whistle_adjusted = n_whistle.copy()
-                                                n_whistle_adjusted[:, 0] += frame_width
-                                                
-                                                # Combine the whistles
-                                                merged_whistle = np.vstack([c_whistle, n_whistle_adjusted])
-                                                # Sort by time (x-coordinate)
-                                                merged_whistle = merged_whistle[merged_whistle[:, 0].argsort()]
-                                                merged_whistle[:, 0] += current_frame 
-                                                
-                                                # Convert to time-frequency coordinates
-                                                merged_whistle_tf = merged_whistle.copy().astype(np.float32)
-                                                merged_whistle_tf[:, 0] =   (merged_whistle_tf[:, 0]-0.5) * 0.002 # Convert to milliseconds
-                                                merged_whistle_tf[:, 1] = (freq_height - 1 - merged_whistle_tf[:, 1] - 0.5) * 125  # Convert to frequency
-                                                
-                                                # Store the merged whistle
-                                                merged_whistles.append(merged_whistle_tf)
-                                                
-                                                # Mark these whistles as merged so they won't be considered again
-                                                merged_ids.add(c_id)
-                                                merged_ids.add(n_id)
+                    for c_id, c_whistle in current_whistles.items():
+                        # Skip if this whistle has already been merged
+                        if c_id in merged_ids:
+                            continue
+                            
+                        # Check if whistle is cut at right edge (x values close to frame width)
+                        if np.any(c_whistle[:, 0] >= frame_width - 1):  # Within 1ms of edge
+                            # Look for matching whistles in next frame cut at left edge
+                            for n_id, n_whistle in next_whistles.items():
+                                # Skip if this whistle has already been merged
+                                if n_id in merged_ids:
+                                    continue
+                                    
+                                # Check if whistle starts at left edge
+                                if np.any(n_whistle[:, 0] < 1):  # Within 1ms of edge
+                                    # Get rightmost points of current whistle
+                                    c_right_points = c_whistle[c_whistle[:, 0] >= frame_width - 1]
+                                    # Get leftmost points of next whistle
+                                    n_left_points = n_whistle[n_whistle[:, 0] < 1]
+                                    
+                                    # Check if y-coordinates are similar (frequency alignment within 250Hz)
+                                    # Since each pixel is 125Hz, a difference of 2 pixels = 250Hz
+                                    c_avg_y = np.mean(c_right_points[:, 1])
+                                    n_avg_y = np.mean(n_left_points[:, 1])
+                                    
+                                    if abs(c_avg_y - n_avg_y) <= 2:  # 2 pixels = 250Hz threshold
+                                        # Merge the whistles
+                                        # Adjust x-coordinates of next whistle by adding frame width (300ms)
+                                        n_whistle_adjusted = n_whistle.copy()
+                                        n_whistle_adjusted[:, 0] += frame_width
+                                        
+                                        # Combine the whistles
+                                        merged_whistle = np.vstack([c_whistle, n_whistle_adjusted])
+                                        # Sort by time (x-coordinate)
+                                        merged_whistle = merged_whistle[merged_whistle[:, 0].argsort()]
+                                        merged_whistle[:, 0] += current_frame 
+                                        
+                                        # Convert to time-frequency coordinates
+                                        merged_whistle_tf = merged_whistle.copy().astype(np.float32)
+                                        merged_whistle_tf[:, 0] =   (merged_whistle_tf[:, 0]-0.5) * 0.002 # Convert to milliseconds
+                                        merged_whistle_tf[:, 1] = (freq_height - 1 - merged_whistle_tf[:, 1] - 0.5) * 125  # Convert to frequency
+                                        
+                                        # Store the merged whistle
+                                        merged_whistles.append(merged_whistle_tf)
+                                        
+                                        # Mark these whistles as merged so they won't be considered again
+                                        merged_ids.add(c_id)
+                                        merged_ids.add(n_id)
 
             # Second pass: add all non-merged whistles to the complete list
-            for frame, whistle_list in coco_whistles.items():
-                for whistle_dict in whistle_list:
-                    for whistle_id, whistle in whistle_dict.items():
-                        # Skip if this whistle was already part of a merge
-                        if whistle_id in merged_ids:
-                            continue
-                        
-                        # Convert to time-frequency coordinates
-                        whistle_tf = whistle.copy().astype(np.float32)
-                        whistle_tf[:, 0] = frame + whistle_tf[:, 0]  # Add frame start
-                        whistle_tf[:, 0] = (whistle_tf[:, 0] - 0.5) * 0.002  # Convert to milliseconds
-                        whistle_tf[:, 1] = (freq_height - 1 - whistle_tf[:, 1] - 0.5) * 125  # Convert to frequency
-                        
-                        # Add to the complete list
-                        all_whistles.append(whistle_tf)
+            for frame, whistle_dict in coco_whistles.items():
+                for whistle_id, whistle in whistle_dict.items():
+                    # Skip if this whistle was already part of a merge
+                    if whistle_id in merged_ids:
+                        continue
+                    
+                    # Convert to time-frequency coordinates
+                    whistle_tf = whistle.copy().astype(np.float32)
+                    whistle_tf[:, 0] = frame + whistle_tf[:, 0]  # Add frame start
+                    whistle_tf[:, 0] = (whistle_tf[:, 0] - 0.5) * 0.002  # Convert to milliseconds
+                    whistle_tf[:, 1] = (freq_height - 1 - whistle_tf[:, 1] - 0.5) * 125  # Convert to frequency
+                    
+                    # Add to the complete list
+                    all_whistles.append(whistle_tf)
 
             # Add merged whistles to the complete list
             all_whistles.extend(merged_whistles)
