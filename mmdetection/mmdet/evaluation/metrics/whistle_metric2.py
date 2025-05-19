@@ -181,7 +181,8 @@ class WhistleMetric2(BaseMetric):
         if  'masks' not in results[0]:
             raise ValueError('The results should contain masks')
         
-        whistles_json = [] if 'masks' in results[0] else None
+        results_dict = defaultdict(dict)
+
         for idx, result in enumerate(tqdm(results, desc='Convert dt to whistle')):
             image_id = result.get('img_id', idx)
             if image_id not in image_ids:
@@ -193,20 +194,14 @@ class WhistleMetric2(BaseMetric):
             masks = result['masks']
             mask_scores = result.get('mask_scores', scores)
             for i, label in enumerate(labels):
-                data = dict()
-                data['image_id'] = image_id
-                data['score'] = float(mask_scores[i])
-                if data['score'] <  filter_dt:
+                if float(mask_scores[i]) <  filter_dt:
                     continue
-                data['category_id'] = self.cat_ids[label]
                 if isinstance(masks[i]['counts'], bytes):
                     masks[i]['counts'] = masks[i]['counts'].decode()
                 bitmap = maskUtils.decode(masks[i])
                 if bitmap.sum() > 0:
-                    data['whistle'] = mask_to_whistle(bitmap)
-                else:
-                    continue
-                whistles_json.append(data)
+                    whistle= mask_to_whistle(bitmap)
+                    results_dict[image_id][idx + i] = whistle
 
 
         # TODO: dump whistles
@@ -219,7 +214,7 @@ class WhistleMetric2(BaseMetric):
         #     result_files['segm'] = f'{outfile_prefix}.segm.json'
         #     dump(segm_json_results, result_files['segm'])
 
-        return whistles_json
+        return results_dict
 
     # TODO: data_batch is no longer needed, consider adjusting the
     #  parameter position
@@ -289,9 +284,8 @@ class WhistleMetric2(BaseMetric):
 
         for id, img in self._coco_api.imgs.items():
             audio_to_img[img['audio_filename']][img['start_frame']] = id  # {stem: {start_frame: img_id}}
-
         
-        
+ 
         img_to_whistles = dict()
         for stem in stems:
             start_frames = list(audio_to_img[stem].keys())
@@ -299,20 +293,27 @@ class WhistleMetric2(BaseMetric):
             ordered_idx = np.argsort(start_frames)
             sorted_frames = [start_frames[i] for i in ordered_idx]
             img_ids = [image_ids[i] for i in ordered_idx]
+            
+            img_to_frames = {img_id: start_frame for img_id, start_frame in zip(image_ids, sorted_frames)} 
+            filter_dt = 0.1
+            result_whistle = self.results2whistles(preds, img_ids, filter_dt=filter_dt)  # {img_id: {id: whistle ...} }
+            coco_whistles = {img_to_frames[img_id]: whistles for img_id, whistles in result_whistle.items()}  # {start_frame: {id: whistle} ...}
 
+            # coco_whistles = dict()
+            # for i, (sf, img_id) in enumerate(zip(sorted_frames, img_ids)):
+            #     ann_ids = self._coco_api.getAnnIds(imgIds=img_id)
+            #     anns = self._coco_api.loadAnns(ann_ids)
+            #     coco_whistles[sf] = {ann['id']: mask_to_whistle(self._coco_api.annToMask(ann)) for ann in anns}  # {start_frame: {ann_id: whistle} ...}
+            
 
-            coco_whistles = dict()
-            for i, (sf, img_id) in enumerate(zip(sorted_frames, img_ids)):
-                ann_ids = self._coco_api.getAnnIds(imgIds=img_id)
-                anns = self._coco_api.loadAnns(ann_ids)
-                coco_whistles[sf] = {ann['id']: mask_to_whistle(self._coco_api.annToMask(ann)) for ann in anns}  # {start_frame: {ann_id: whistle} ...}
 
             # Merge whistles that are cut at frame boundaries
             merged_whistles = []
-            all_whistles = []  # Will contain both merged and non-merged whistles
+            dt_whistles = []  # Will contain both merged and non-merged whistles
             frame_width = 1500  # 1500 pixels = 300ms (since 1 pixel = 0.2ms)
             freq_height = 769  # 769 pixels = 125Hz (since 1 pixel = 125Hz)
 
+            sorted_frames = sorted(coco_whistles.keys())
             # Track whistles that have already been merged to avoid re-merging
             merged_ids = set()
 
@@ -390,16 +391,16 @@ class WhistleMetric2(BaseMetric):
                     whistle_tf[:, 1] = (freq_height - 1 - whistle_tf[:, 1] - 0.5) * 125  # Convert to frequency
                     
                     # Add to the complete list
-                    all_whistles.append(whistle_tf)
+                    dt_whistles.append(whistle_tf)
 
             # Add merged whistles to the complete list
-            all_whistles.extend(merged_whistles)
+            dt_whistles.extend(merged_whistles)
 
             binfile = os.path.join('/home/xzhang3906/Desktop/projects/whistle_prompter/data/cross/anno', f'{stem}.bin')
             gt_tonnals = utils.load_annotation(binfile)
             img_to_whistles[stem]={
                 'gts': gt_tonnals,
-                'dts': all_whistles,
+                'dts': dt_whistles,
                 'w': torch.inf,
                 'img_id': stem,
             }
@@ -789,10 +790,15 @@ def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, vali
         #    assert (gts[i]== dts[i]).all(), f"gt and dt should not be the same {len(gts)} vs {len(dts)}"
         pass
 
+    if type(valid_len) == int:
+        delt= 1
+    else:
+        delt = 0.002
+
     for gt_idx, gt in enumerate(gts):
         gt_start_x = max(0, gt[:, 0].min())
-        gt_end_x = min(w -1 , gt[:, 0].max())
-        gt_dura = gt_end_x + 1 - gt_start_x  # add 1 in pixel
+        gt_end_x = min(w -delt , gt[:, 0].max())
+        gt_dura = gt_end_x + delt - gt_start_x  # add 1 in pixel
         gt_durations[gt_idx] = gt_dura
         gt_ranges[gt_idx] = (gt_start_x, gt_end_x)
   
@@ -800,7 +806,7 @@ def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, vali
         dt_start_x = max(0, dt[:, 0].min())
         dt_end_x = min(w, dt[:, 0].max())
         dt_ranges[dt_idx] = (dt_start_x, dt_end_x)
-        dt_durations[dt_idx] = dt_end_x + 1 - dt_start_x # add 1 in pixel
+        dt_durations[dt_idx] = dt_end_x + delt - dt_start_x # add 1 in pixel
     
     dt_false_pos_all = list(range(dt_num))
     dt_true_pos_all = []
