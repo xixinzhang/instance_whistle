@@ -42,7 +42,7 @@ data_preprocessor = dict(
         57.375,
     ],
     type='DetDataPreprocessor')
-data_root = '../data/coco'
+data_root = '../data/cross/coco'
 dataset_type = 'CocoDataset'
 default_hooks = dict(
     checkpoint=dict(
@@ -281,7 +281,7 @@ test_dataloader = dict(
         ann_file='labels.json',
         backend_args=None,
         data_prefix=dict(img='data/'),
-        data_root='../data/coco/val',
+        data_root='../data/cross/coco/val',
         pipeline=[
             dict(backend_args=None, to_float32=True, type='LoadImageFromFile'),
             dict(keep_ratio=True, scale=(
@@ -306,7 +306,7 @@ test_dataloader = dict(
     persistent_workers=True,
     sampler=dict(shuffle=False, type='DefaultSampler'))
 test_evaluator = dict(
-    ann_file='../data/coco/val/labels.json',
+    ann_file='../data/cross/coco/val/labels.json',
     backend_args=None,
     format_only=False,
     metric=[
@@ -388,7 +388,7 @@ train_dataloader = dict(
         backend_args=None,
         data_prefix=dict(
             img='data/', ),
-        data_root='../data/coco/train',
+        data_root='../data/cross/coco/train',
         filter_cfg=dict(filter_empty_gt=True, min_size=32),
         pipeline= train_pipeline,
         type='CocoDataset'),
@@ -408,7 +408,7 @@ val_dataloader = dict(
         ann_file='labels.json',
         backend_args=None,
         data_prefix=dict(img='data/', ),
-        data_root='../data/coco/val',
+        data_root='../data/cross/coco/val',
         pipeline=[
             dict(backend_args=None, to_float32=True, type='LoadImageFromFile'),
             dict(keep_ratio=True, scale=(
@@ -433,7 +433,7 @@ val_dataloader = dict(
     persistent_workers=True,
     sampler=dict(shuffle=False, type='DefaultSampler'))
 val_evaluator = dict(
-    ann_file='../data/coco/val/labels.json',
+    ann_file='../data/cross/coco/val/labels.json',
     backend_args=None,
     format_only=False,
     metric=[

@@ -27,6 +27,8 @@ from ..functional import eval_recalls
 
 import pycocotools.mask as maskUtils
 from rich import print as rprint
+from whistle_prompter import utils
+import os
 
 @METRICS.register_module()
 class WhistleMetric2(BaseMetric):
@@ -276,83 +278,141 @@ class WhistleMetric2(BaseMetric):
         # split gt and prediction list
         _, preds = zip(*results)
 
-        stems = json.load(open('/home/xzhang3906/Desktop/projects/sam_whistle/data/cross_species/meta.json'))
+        stems = json.load(open('/home/xzhang3906/Desktop/projects/whistle_prompter/data/cross/meta.json'))
         stems = stems['test']
 
         # DEBUG: 
         stems = ['palmyra092007FS192-070924-205305']
 
         # add img_id in same audio file
-        audio_to_img = defaultdict(list)
-        audio_to_frame = defaultdict(list)
+        audio_to_img = defaultdict(dict)
 
         for id, img in self._coco_api.imgs.items():
-            audio_to_img[img['audio_filename']].append(id)
-            audio_to_frame[img['start_frame']].append(id)
+            audio_to_img[img['audio_filename']][img['start_frame']] = id  # {stem: {start_frame: img_id}}
 
-        def get_img_frame():
-            pass
         
-        image_ids = []
-        for stem in stems:
-            image_ids.extend(audio_to_img[stem])
         
-        ann_ids = self._coco_api.getAnnIds(imgIds=image_ids)
-        eval_anns = self._coco_api.loadAnns(ann_ids)
-
-        gt_per_img = []
-        for ann in tqdm(eval_anns, desc='Convert gt to whistle'):
-            gt_per_img.append({
-                'image_id': ann['image_id'],
-                'score': 1.0,
-                'category_id': ann['category_id'],
-                'whistle': mask_to_whistle(
-                    self._coco_api.annToMask(ann))
-        })
-        
-
-        # handle lazy init
-        if self.cat_ids is None:
-            self.cat_ids = self._coco_api.get_cat_ids(
-                cat_names=self.dataset_meta['classes'])
-        if self.img_ids is None:
-            self.img_ids = self._coco_api.get_img_ids()
-
-        # convert predictions to coco format and dump to json file
-        filter_dt = 0.95
-        dt_per_img = self.results2whistles(preds, image_ids = image_ids, filter_dt=filter_dt)
-        rprint(f'Num of detected whistles: {len(dt_per_img)} filtered by score {filter_dt}')
-        rprint(f'Num of gt whistles: {len(gt_per_img)} from {len(results)} imgs')
-
-        # TODO: stitch the whistles cutted
-        # TODO: output the whistle to silbido
-
-        w = results[0][0]['width']
-        img_to_dts = defaultdict(list)
-        for i, dt in enumerate(dt_per_img):
-            img_to_dts[dt['image_id']].append(
-                dt['whistle'],
-            )
-        
-        img_to_gts = defaultdict(list)
-        for i, gt in enumerate(gt_per_img):
-            img_to_gts[gt['image_id']].append(
-                gt['whistle'],
-            )
-
         img_to_whistles = dict()
-        for img_id, _ in self._coco_api.imgs.items():
-            img_to_whistles[img_id] = {
-                'gts': img_to_gts[img_id],
-                'dts': img_to_dts[img_id],
-                'w': w,
-                'img_id': img_id,
+        for stem in stems:
+            start_frames = list(audio_to_img[stem].keys())
+            image_ids=  list(audio_to_img[stem].values())
+            ordered_idx = np.argsort(start_frames)
+            sorted_frames = [start_frames[i] for i in ordered_idx]
+            img_ids = [image_ids[i] for i in ordered_idx]
+
+
+            coco_whistles = dict()
+            for i, (sf, img_id) in enumerate(zip(sorted_frames, img_ids)):
+                ann_ids = self._coco_api.getAnnIds(imgIds=img_id)
+                anns = self._coco_api.loadAnns(ann_ids)
+                whistle_list = [{ann['id']: mask_to_whistle(self._coco_api.annToMask(ann))} for ann in anns]
+                coco_whistles[sf] = whistle_list  # {start_frame: [{ann_id: whistle}]}
+
+            # Merge whistles that are cut at frame boundaries
+            merged_whistles = []
+            all_whistles = []  # Will contain both merged and non-merged whistles
+            frame_width = 1500  # 1500 pixels = 300ms (since 1 pixel = 0.2ms)
+            freq_height = 769  # 769 pixels = 125Hz (since 1 pixel = 125Hz)
+
+            # Track whistles that have already been merged to avoid re-merging
+            merged_ids = set()
+
+            # First pass: identify and merge whistles at frame boundaries
+            for i in range(len(sorted_frames) - 1):
+                current_frame = sorted_frames[i]
+                next_frame = sorted_frames[i + 1]
+                
+                # Check if frames are consecutive (300ms apart)
+                if next_frame - current_frame == frame_width:
+                    current_whistles = coco_whistles[current_frame]
+                    next_whistles = coco_whistles[next_frame]
+                    
+                    # Find whistles that might be cut at right edge of current frame
+                    for c_idx, c_whistle_dict in enumerate(current_whistles):
+                        for c_id, c_whistle in c_whistle_dict.items():
+                            # Skip if this whistle has already been merged
+                            if c_id in merged_ids:
+                                continue
+                                
+                            # Check if whistle is cut at right edge (x values close to frame width)
+                            if np.any(c_whistle[:, 0] >= frame_width - 1):  # Within 1ms of edge
+                                # Look for matching whistles in next frame cut at left edge
+                                for n_idx, n_whistle_dict in enumerate(next_whistles):
+                                    for n_id, n_whistle in n_whistle_dict.items():
+                                        # Skip if this whistle has already been merged
+                                        if n_id in merged_ids:
+                                            continue
+                                            
+                                        # Check if whistle starts at left edge
+                                        if np.any(n_whistle[:, 0] < 1):  # Within 1ms of edge
+                                            # Get rightmost points of current whistle
+                                            c_right_points = c_whistle[c_whistle[:, 0] >= frame_width - 1]
+                                            # Get leftmost points of next whistle
+                                            n_left_points = n_whistle[n_whistle[:, 0] < 1]
+                                            
+                                            # Check if y-coordinates are similar (frequency alignment within 250Hz)
+                                            # Since each pixel is 125Hz, a difference of 2 pixels = 250Hz
+                                            c_avg_y = np.mean(c_right_points[:, 1])
+                                            n_avg_y = np.mean(n_left_points[:, 1])
+                                            
+                                            if abs(c_avg_y - n_avg_y) <= 2:  # 2 pixels = 250Hz threshold
+                                                # Merge the whistles
+                                                # Adjust x-coordinates of next whistle by adding frame width (300ms)
+                                                n_whistle_adjusted = n_whistle.copy()
+                                                n_whistle_adjusted[:, 0] += frame_width
+                                                
+                                                # Combine the whistles
+                                                merged_whistle = np.vstack([c_whistle, n_whistle_adjusted])
+                                                # Sort by time (x-coordinate)
+                                                merged_whistle = merged_whistle[merged_whistle[:, 0].argsort()]
+                                                merged_whistle[:, 0] += current_frame 
+                                                
+                                                # Convert to time-frequency coordinates
+                                                merged_whistle_tf = merged_whistle.copy().astype(np.float32)
+                                                merged_whistle_tf[:, 0] =   (merged_whistle_tf[:, 0]-0.5) * 0.002 # Convert to milliseconds
+                                                merged_whistle_tf[:, 1] = (freq_height - 1 - merged_whistle_tf[:, 1] - 0.5) * 125  # Convert to frequency
+                                                
+                                                # Store the merged whistle
+                                                merged_whistles.append(merged_whistle_tf)
+                                                
+                                                # Mark these whistles as merged so they won't be considered again
+                                                merged_ids.add(c_id)
+                                                merged_ids.add(n_id)
+
+            # Second pass: add all non-merged whistles to the complete list
+            for frame, whistle_list in coco_whistles.items():
+                for whistle_dict in whistle_list:
+                    for whistle_id, whistle in whistle_dict.items():
+                        # Skip if this whistle was already part of a merge
+                        if whistle_id in merged_ids:
+                            continue
+                        
+                        # Convert to time-frequency coordinates
+                        whistle_tf = whistle.copy().astype(np.float32)
+                        whistle_tf[:, 0] = frame + whistle_tf[:, 0]  # Add frame start
+                        whistle_tf[:, 0] = (whistle_tf[:, 0] - 0.5) * 0.002  # Convert to milliseconds
+                        whistle_tf[:, 1] = (freq_height - 1 - whistle_tf[:, 1] - 0.5) * 125  # Convert to frequency
+                        
+                        # Add to the complete list
+                        all_whistles.append(whistle_tf)
+
+            # Add merged whistles to the complete list
+            all_whistles.extend(merged_whistles)
+
+            binfile = os.path.join('/home/xzhang3906/Desktop/projects/whistle_prompter/data/cross/anno', f'{stem}.bin')
+            gt_tonnals = utils.load_annotation(binfile)
+            img_to_whistles[stem]={
+                'gts': gt_tonnals,
+                'dts': all_whistles,
+                'w': torch.inf,
+                'img_id': stem,
             }
+
 
         eval_results = OrderedDict()
 
-        res = accumulate_wistle_results(img_to_whistles, valid_gt=True)
-        summary = sumerize_whisle_results(res)
+        res = accumulate_wistle_results(img_to_whistles, valid_gt=True, valid_len = 0.15, deviation_tolerence= 350)
+        summary = summarize_whistle_results(res)
         rprint(summary)
 
         return eval_results
@@ -714,7 +774,7 @@ def gather_whistles(coco_gt:COCO, coco_dt:COCO, filter_dt=0.95, valid_gt=False, 
     return img_to_whistles
 
 
-def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, debug=False):
+def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, valid_len = 75, deviation_tolerence = 350/125, debug=False):
     """given whistle gt and dt in evaluation unit and get comparison results
     Args:
         gts, dts: N, 2 in format of y, x(or t, f)
@@ -782,7 +842,7 @@ def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, debu
 
         valid = True
         if valid_gt:
-            if gt_dura < 75: # or boudns_gt[gt_idx] < 3:
+            if gt_dura < valid_len: # or boudns_gt[gt_idx] < 3:
                 valid= False
         # rprint(f'valid:{valid}, gt_dura: {gt_dura}, boudns_gt: {boudns_gt[gt_idx]}')
 
@@ -797,7 +857,7 @@ def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, debu
             # Note: remove interpolation
             gt_ovlp_ys = gt[:, 1][np.searchsorted(gt[:, 0], dt_ovlp_xs)]
             deviation = np.abs(gt_ovlp_ys - dt_ovlp_ys)
-            deviation_tolerence = 350 / 125
+            deviation_tolerence = deviation_tolerence
             if debug:
                 # deviation_tolerence = 0.1
                 pass
@@ -867,7 +927,7 @@ def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, debu
     return res
 
 
-def accumulate_wistle_results(img_to_whistles,valid_gt=False, debug=False):
+def accumulate_wistle_results(img_to_whistles, valid_gt, valid_len=75,deviation_tolerence = 350/125, debug=False):
     """accumulate the whistle results for all images (segment or entire audio)"""
     accumulated_res = {
         'dt_false_pos_all': 0,
@@ -882,7 +942,7 @@ def accumulate_wistle_results(img_to_whistles,valid_gt=False, debug=False):
         'all_dura': []
     }
     for img_id, whistles in img_to_whistles.items():
-        res = compare_whistles(**whistles, valid_gt = valid_gt, debug=debug)
+        res = compare_whistles(**whistles, valid_gt = valid_gt, valid_len = valid_len, deviation_tolerence = deviation_tolerence,   debug=debug)
         # rprint(f'img_id: {img_id}')
         # rprint(sumerize_whisle_results(res))
         accumulated_res['dt_false_pos_all'] += res['dt_false_pos_all']
@@ -897,7 +957,7 @@ def accumulate_wistle_results(img_to_whistles,valid_gt=False, debug=False):
         accumulated_res['all_dura'].extend(res['all_dura'])
     return accumulated_res
 
-def sumerize_whisle_results(accumulated_res):
+def summarize_whistle_results(accumulated_res):
     """sumerize the whistle results"""
     accumulated_res = copy.deepcopy(accumulated_res)
     dt_fp = accumulated_res['dt_false_pos_all']
@@ -921,6 +981,8 @@ def sumerize_whisle_results(accumulated_res):
     coverage = accumulated_res['all_covered'] / accumulated_res['all_dura'] if accumulated_res['all_dura'] > 0 else 0
 
     summary = {
+        'gt_all': gt_tp + gt_fn,
+        'dt_all': dt_tp + dt_fp,
         'precision': precision,
         'recall': recall,
         'frag': frag,
