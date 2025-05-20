@@ -65,7 +65,7 @@ def save_specs_img(segments_dict:dict[str, dict[int, np.ndarray]], save_dir:str,
         dirname, stem = name.split("/")
         print(f"Saving {stem} to {save_dir}")
 
-        bin_file = Path(f'data/whale_whistle/{dirname}/{stem}.bin')
+        bin_file = Path(f'data/cross/anno/{stem}.bin')
         annos = utils.load_annotation(bin_file)
         for start_frame, segment in segments.items():
             # annotations
@@ -196,20 +196,21 @@ if __name__ == "__main__":
     parser.add_argument("--output_dir", type=str, default="data/coco")
     args = parser.parse_args()
 
-    # with open("data/meta.json") as f:
-    #     meta = json.load(f)
-    # filenames = []
-    # for _, stems in meta["data"].items():
-    #     filenames.extend([f"data/audio/{stem}.wav" for stem in stems])
-
+    with open("data/cross/meta.json") as f:
+        meta = json.load(f)
     filenames = []
-    root_dir = os.path.expanduser("~/storage/DCLDE/whale_whistle")
-    classes = ['bottlenose', 'common', 'melon-headed', 'spinner']
-    for s in classes[:2]:
-        filenames.extend(glob.glob(os.path.join(root_dir, s, "*.wav")))
+    for stem in meta["test"]:
+        filenames.append(f"data/cross/audio/{stem}.wav")
+
+    # filenames = []
+    # root_dir = os.path.expanduser("~/storage/DCLDE/whale_whistle")
+    # classes = ['bottlenose', 'common', 'melon-headed', 'spinner']
+    # for s in classes[:2]:
+    #     filenames.extend(glob.glob(os.path.join(root_dir, s, "*.wav")))
+
 
     # filenames = filenames[:1]
-    filenames = '/home/xzhang3906/storage/DCLDE/whale_whistle/bottlenose/palmyra092007FS192-070924-205305.wav'
+    # filenames = '/home/xzhang3906/storage/DCLDE/whale_whistle/bottlenose/palmyra092007FS192-070924-205305.wav'
     # with open("data/meta.json") as f:
     #     meta = json.load(f)
     # filenames = [f'data/audio/{f}.wav' for f in meta['data']["test"]]

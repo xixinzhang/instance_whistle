@@ -294,7 +294,7 @@ class WhistleMetric(BaseMetric):
             self.img_ids = self._coco_api.get_img_ids()
 
         # convert predictions to coco format and dump to json file
-        filter_dt = 0.1
+        filter_dt = 0.9
         dt_per_img = self.results2whistles(preds, filter_dt=filter_dt)
         rprint(f'Num of detected whistles: {len(dt_per_img)} filtered by score {filter_dt}')
         rprint(f'Num of gt whistles: {len(gt_per_img)} from {len(results)} imgs')
@@ -328,7 +328,7 @@ class WhistleMetric(BaseMetric):
         metric = self.metrics[0]
         logger.info(f'Evaluating {metric}...')
         res = accumulate_wistle_results(img_to_whistles, valid_gt=True)
-        summary = sumerize_whisle_results(res)
+        summary = summarize_whistle_results(res)
         rprint(summary)
 
         return eval_results
@@ -874,7 +874,7 @@ def accumulate_wistle_results(img_to_whistles,valid_gt=False, debug=False):
         accumulated_res['all_dura'].extend(res['all_dura'])
     return accumulated_res
 
-def sumerize_whisle_results(accumulated_res):
+def summarize_whistle_results(accumulated_res):
     """sumerize the whistle results"""
     accumulated_res = copy.deepcopy(accumulated_res)
     dt_fp = accumulated_res['dt_false_pos_all']
@@ -898,6 +898,8 @@ def sumerize_whisle_results(accumulated_res):
     coverage = accumulated_res['all_covered'] / accumulated_res['all_dura'] if accumulated_res['all_dura'] > 0 else 0
 
     summary = {
+        'gt_all': gt_tp + gt_fn,
+        'dt_all': dt_tp + dt_fp,
         'precision': precision,
         'recall': recall,
         'frag': frag,

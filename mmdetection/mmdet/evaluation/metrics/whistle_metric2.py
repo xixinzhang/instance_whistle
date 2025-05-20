@@ -183,6 +183,7 @@ class WhistleMetric2(BaseMetric):
         
         results_dict = defaultdict(dict)
 
+        w_id = 0
         for idx, result in enumerate(tqdm(results, desc='Convert dt to whistle')):
             image_id = result.get('img_id', idx)
             if image_id not in image_ids:
@@ -201,7 +202,8 @@ class WhistleMetric2(BaseMetric):
                 bitmap = maskUtils.decode(masks[i])
                 if bitmap.sum() > 0:
                     whistle= mask_to_whistle(bitmap)
-                    results_dict[image_id][idx + i] = whistle
+                    results_dict[image_id][w_id] = whistle
+                    w_id += 1
 
 
         # TODO: dump whistles
@@ -277,7 +279,7 @@ class WhistleMetric2(BaseMetric):
         stems = stems['test']
 
         # DEBUG: 
-        stems = ['palmyra092007FS192-070924-205305']
+        # stems = ['palmyra092007FS192-070924-205305']
 
         # add img_id in same audio file
         audio_to_img = defaultdict(dict)
@@ -293,12 +295,14 @@ class WhistleMetric2(BaseMetric):
             ordered_idx = np.argsort(start_frames)
             sorted_frames = [start_frames[i] for i in ordered_idx]
             img_ids = [image_ids[i] for i in ordered_idx]
-            
+
+            # dt eval 
             img_to_frames = {img_id: start_frame for img_id, start_frame in zip(image_ids, sorted_frames)} 
-            filter_dt = 0.1
+            filter_dt = 0.9
             result_whistle = self.results2whistles(preds, img_ids, filter_dt=filter_dt)  # {img_id: {id: whistle ...} }
             coco_whistles = {img_to_frames[img_id]: whistles for img_id, whistles in result_whistle.items()}  # {start_frame: {id: whistle} ...}
 
+            # # gt eval
             # coco_whistles = dict()
             # for i, (sf, img_id) in enumerate(zip(sorted_frames, img_ids)):
             #     ann_ids = self._coco_api.getAnnIds(imgIds=img_id)
@@ -366,12 +370,12 @@ class WhistleMetric2(BaseMetric):
                                         merged_whistle[:, 0] += current_frame 
                                         
                                         # Convert to time-frequency coordinates
-                                        merged_whistle_tf = merged_whistle.copy().astype(np.float32)
-                                        merged_whistle_tf[:, 0] =   (merged_whistle_tf[:, 0]-0.5) * 0.002 # Convert to milliseconds
-                                        merged_whistle_tf[:, 1] = (freq_height - 1 - merged_whistle_tf[:, 1] - 0.5) * 125  # Convert to frequency
+                                        merged_whistle_pix = merged_whistle.copy().astype(np.float32)
+                                        # merged_whistle_pix[:, 0] =   (merged_whistle_pix[:, 0]-0.5) * 0.002 # Convert to milliseconds
+                                        # merged_whistle_pix[:, 1] = (freq_height - 1 - merged_whistle_pix[:, 1] - 0.5) * 125  # Convert to frequency
                                         
                                         # Store the merged whistle
-                                        merged_whistles.append(merged_whistle_tf)
+                                        merged_whistles.append(merged_whistle_pix)
                                         
                                         # Mark these whistles as merged so they won't be considered again
                                         merged_ids.add(c_id)
@@ -385,30 +389,47 @@ class WhistleMetric2(BaseMetric):
                         continue
                     
                     # Convert to time-frequency coordinates
-                    whistle_tf = whistle.copy().astype(np.float32)
-                    whistle_tf[:, 0] = frame + whistle_tf[:, 0]  # Add frame start
-                    whistle_tf[:, 0] = (whistle_tf[:, 0] - 0.5) * 0.002  # Convert to milliseconds
-                    whistle_tf[:, 1] = (freq_height - 1 - whistle_tf[:, 1] - 0.5) * 125  # Convert to frequency
+                    whistle_pix = whistle.copy().astype(np.float32)
+                    whistle_pix[:, 0] = frame + whistle_pix[:, 0]  # Add frame start
+                    # whistle_pix[:, 0] = (whistle_pix[:, 0] - 0.5) * 0.002  # Convert to milliseconds
+                    # whistle_pix[:, 1] = (freq_height - 1 - whistle_pix[:, 1] - 0.5) * 125  # Convert to frequency
                     
                     # Add to the complete list
-                    dt_whistles.append(whistle_tf)
+                    dt_whistles.append(whistle_pix)
 
             # Add merged whistles to the complete list
             dt_whistles.extend(merged_whistles)
 
             binfile = os.path.join('/home/xzhang3906/Desktop/projects/whistle_prompter/data/cross/anno', f'{stem}.bin')
-            gt_tonnals = utils.load_annotation(binfile)
+            gt_tonals = utils.load_annotation(binfile)
+
+            def unique_pix(traj):
+                unique_x = np.unique(traj[:, 0])
+                averaged_y = np.zeros_like(unique_x)
+                for i, x in enumerate(unique_x):
+                    y_values = traj[traj[:, 0] == x][:, 1]
+                    averaged_y[i] = int(np.round(np.mean(y_values)))
+                unique_traj = np.column_stack((unique_x, averaged_y))
+                return unique_traj
+
+            gt_tonals_pix = []
+            for i, gt_traj in enumerate(gt_tonals):
+                traj_pix = utils.tf_to_pix(gt_traj, width=np.inf)
+                traj_pix = unique_pix(traj_pix)
+                gt_tonals_pix.append(traj_pix)
+
             img_to_whistles[stem]={
-                'gts': gt_tonnals,
+                'gts': gt_tonals_pix,
                 'dts': dt_whistles,
                 'w': torch.inf,
                 'img_id': stem,
             }
-
-
+        sum_gts = sum([len(whistles['gts']) for whistles in img_to_whistles.values()])
+        sum_dts = sum([len(whistles['dts']) for whistles in img_to_whistles.values()])
+        rprint(f'gathered {sum_gts} gt whistles, {sum_dts} dt whistles within')
         eval_results = OrderedDict()
 
-        res = accumulate_wistle_results(img_to_whistles, valid_gt=True, valid_len = 0.15, deviation_tolerence= 350)
+        res = accumulate_wistle_results(img_to_whistles, valid_gt=True, valid_len = 75, deviation_tolerence= 350/125)
         summary = summarize_whistle_results(res)
         rprint(summary)
 
@@ -848,7 +869,6 @@ def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, vali
                 valid= False
         # rprint(f'valid:{valid}, gt_dura: {gt_dura}, boudns_gt: {boudns_gt[gt_idx]}')
 
-
         for ovlp_dt_idx in ovlp_dt_ids:
             ovlp_dt = dts[ovlp_dt_idx]
             dt_xs, dt_ys = ovlp_dt[:, 0], ovlp_dt[:, 1]
@@ -877,7 +897,7 @@ def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, vali
 
                 # dt_matched_dev.append(deviation)
                 
-                covered += dt_ovlp_xs.max() - dt_ovlp_xs.min() + 1
+                covered += dt_ovlp_xs.max() - dt_ovlp_xs.min() + delt
                 if valid:
                     dt_true_pos_valid.append(ovlp_dt_idx)
 
@@ -945,8 +965,8 @@ def accumulate_wistle_results(img_to_whistles, valid_gt, valid_len=75,deviation_
     }
     for img_id, whistles in img_to_whistles.items():
         res = compare_whistles(**whistles, valid_gt = valid_gt, valid_len = valid_len, deviation_tolerence = deviation_tolerence,   debug=debug)
-        # rprint(f'img_id: {img_id}')
-        # rprint(sumerize_whisle_results(res))
+        rprint(f'img_id: {img_id}')
+        rprint(summarize_whistle_results(res))
         accumulated_res['dt_false_pos_all'] += res['dt_false_pos_all']
         accumulated_res['dt_true_pos_all'] += res['dt_true_pos_all']
         accumulated_res['dt_true_pos_valid'] += res['dt_true_pos_valid']

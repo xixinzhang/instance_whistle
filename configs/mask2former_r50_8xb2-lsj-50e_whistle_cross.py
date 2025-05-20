@@ -281,7 +281,7 @@ test_dataloader = dict(
         ann_file='labels.json',
         backend_args=None,
         data_prefix=dict(img='data/'),
-        data_root='../data/cross/coco/val',
+        data_root='../data/cross/coco/test',
         pipeline=[
             dict(backend_args=None, to_float32=True, type='LoadImageFromFile'),
             dict(keep_ratio=True, scale=(
@@ -306,7 +306,7 @@ test_dataloader = dict(
     persistent_workers=True,
     sampler=dict(shuffle=False, type='DefaultSampler'))
 test_evaluator = dict(
-    ann_file='../data/cross/coco/val/labels.json',
+    ann_file='../data/cross/coco/test/labels.json',
     backend_args=None,
     format_only=False,
     metric=[
