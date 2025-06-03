@@ -1,4 +1,5 @@
 # Copyright (c) OpenMMLab. All rights reserved.
+from dataclasses import dataclass
 import datetime
 import itertools
 import json
@@ -202,8 +203,9 @@ class WhistleMetric2(BaseMetric):
                 bitmap = maskUtils.decode(masks[i])
                 if bitmap.sum() > 0:
                     whistle= mask_to_whistle(bitmap)
-                    results_dict[image_id][w_id] = whistle
-                    w_id += 1
+                    for w in whistle:
+                        results_dict[image_id][w_id] = w
+                        w_id += 1
 
 
         # TODO: dump whistles
@@ -391,14 +393,15 @@ class WhistleMetric2(BaseMetric):
                     # Convert to time-frequency coordinates
                     whistle_pix = whistle.copy().astype(np.float32)
                     whistle_pix[:, 0] = frame + whistle_pix[:, 0]  # Add frame start
-                    # whistle_pix[:, 0] = (whistle_pix[:, 0] - 0.5) * 0.002  # Convert to milliseconds
-                    # whistle_pix[:, 1] = (freq_height - 1 - whistle_pix[:, 1] - 0.5) * 125  # Convert to frequency
                     
                     # Add to the complete list
                     dt_whistles.append(whistle_pix)
 
             # Add merged whistles to the complete list
             dt_whistles.extend(merged_whistles)
+
+            dt_whistles_tf = [pix_to_tf(whistle, height=freq_height) for whistle in dt_whistles]
+            tonnal_save(dt_whistles_tf, stem)
 
             binfile = os.path.join('/home/xzhang3906/Desktop/projects/whistle_prompter/data/cross/anno', f'{stem}.bin')
             gt_tonals = utils.load_annotation(binfile)
@@ -435,6 +438,33 @@ class WhistleMetric2(BaseMetric):
 
         return eval_results
 
+def pix_to_tf(pix, height):
+    """Convert pixel coordinates to time-frequency coordinates."""
+    time = (pix[:, 0] + 0.5) * 0.002  # Convert to seconds
+    freq = (height - 1 - pix[:, 1] - 0.5) * 125  # Convert to frequency in Hz
+    return np.column_stack((time, freq))
+
+@dataclass
+class contour:
+    time: float
+    freq: float
+
+def tonnal_save(tonnals, stem, model_name = 'mask2former'):
+    """Save the tonnals to a silbido binary file
+    Args:
+        tonnals: list of tonnals array
+        preprcoess to list of dictionaries of tonnals in format
+        {"tfnodes": [
+                {"time": 3.25, "freq": 50.125, "snr": 6.6, "phase": 0.25, "ridge": 1.0},
+                {"time":...},
+                ...,]
+        }
+    """
+    # convert to dataclass
+    tonnals = [contour(time=tonnal[:, 0], freq=tonnal[:, 1]) for tonnal in tonnals]
+
+    from whistle_prompter.utils.write_bin import writeTimeFrequencyBinary
+    writeTimeFrequencyBinary(f'outputs/{stem}_{model_name}_dt.bin', tonnals)
 
 
 def get_traj_valid(conf_map, traj):
@@ -679,7 +709,7 @@ def bezier_grid_path(points, start_idx, end_idx, steps=10):
     
     return grid_path
 
-def mask_to_whistle(mask, method='bresenham'):
+def mask_to_whistle(mask, method='bresenham', max_gap=25, min_segment_ratio = 0.5):
     """convert the instance mask to whistle contour, use skeleton methods
     
     Args
@@ -699,38 +729,76 @@ def mask_to_whistle(mask, method='bresenham'):
     whistle = whistle[whistle[:, 0].argsort()]
     assert whistle.ndim ==2 and whistle.shape[1] == 2, f"whistle shape: {whistle.shape}"
 
-    # connect fragmented whistle points
-    whistle = whistle.tolist()
-    whistle_ =[whistle[0]]
-    for i in range(len(whistle) - 1):
-        current = whistle[i]
-        next_point = whistle[i + 1]
-        
-        # Generate intermediate points between current and next_point
-        if method == 'bresenham':
-            intermediate_points = bresenham_line(current, next_point)
-        elif method == 'midpoint':
-            intermediate_points = midpoint_interpolation(current, next_point)
-        elif method == 'bezier':
-            intermediate_points = bezier_grid_path(whistle, i, i+1)
-        elif method == 'weighted':
-            intermediate_points = simple_weighted_path(whistle, i)
-        else:
-            raise ValueError(f"Unknown method: {method}")
-        
-        # Add intermediate points to trajectory (skip the first one as it's already included)
-        whistle_.extend(intermediate_points[1:])
+    # Split into segments based on point distances
+    segments = []
+    current_segment = [whistle[0]]
     
-    # Group by x-coordinate and select one y-value per x
-    whistle_ = np.array(whistle_)
-    unique_x = np.unique(whistle_[:, 0])
-    averaged_y = np.zeros_like(unique_x)
-    for i, x in enumerate(unique_x):
-        y_values = whistle_[whistle_[:, 0] == x][:, 1]
-        averaged_y[i] = int(np.round(np.mean(y_values)))
-    unique_whistle = np.column_stack((unique_x, averaged_y))
+    for i in range(1, len(whistle)):
+        prev_point = whistle[i-1]
+        current_point = whistle[i]
+        
+        # Calculate distance between consecutive points
+        distance = np.linalg.norm(current_point - prev_point)
+        
+        if distance <= max_gap:
+            current_segment.append(current_point)
+        else:
+            # Close current segment and start new one
+            segments.append(np.array(current_segment))
+            current_segment = [current_point]
+    segments.append(np.array(current_segment))
+    
+    # If no segments met the length requirement, return empty array
+    if not segments:
+        return np.zeros((0, 2), dtype=np.int32)
+    
+    # Sort segments by their x-range length (descending)
+    segments.sort(key=lambda s: s[-1, 0] - s[0, 0], reverse=True)
+    
+      # Determine which segments to keep (long enough compared to main segment)
+    main_segment_length = segments[0][-1, 0] - segments[0][0, 0]
+    min_length = main_segment_length * min_segment_ratio
+    
+    # Process all segments that meet the length requirement
+    result_whistles = []
+    for segment in segments:
+        segment_length = segment[-1, 0] - segment[0, 0]
+        if segment_length >= min_length:
+            # Connect points within this segment
+            segment_points = segment.tolist()
+            processed_segment = [segment_points[0]]
+            
+            for i in range(len(segment_points) - 1):
+                current = segment_points[i]
+                next_point = segment_points[i + 1]
+                
+                # Generate intermediate points
+                if method == 'bresenham':
+                    intermediate_points = bresenham_line(current, next_point)
+                elif method == 'midpoint':
+                    intermediate_points = midpoint_interpolation(current, next_point)
+                elif method == 'bezier':
+                    intermediate_points = bezier_grid_path(segment_points, i, i+1)
+                elif method == 'weighted':
+                    intermediate_points = simple_weighted_path(segment_points, i)
+                else:
+                    raise ValueError(f"Unknown method: {method}")
+                
+                # Add intermediate points
+                processed_segment.extend(intermediate_points[1:])
+            
+            # Convert to numpy array and process x-coordinate grouping
+            processed_segment = np.array(processed_segment)
+            unique_x = np.unique(processed_segment[:, 0])
+            averaged_y = np.zeros_like(unique_x)
+            for i, x in enumerate(unique_x):
+                y_values = processed_segment[processed_segment[:, 0] == x][:, 1]
+                averaged_y[i] = int(np.round(np.mean(y_values)))
+            unique_whistle = np.column_stack((unique_x, averaged_y))
+            
+            result_whistles.append(unique_whistle)
 
-    return unique_whistle
+    return result_whistles
 
 def gather_whistles(coco_gt:COCO, coco_dt:COCO, filter_dt=0.95, valid_gt=False, root_dir=None, debug=False):
     """gather per image whistles from instance masks"""
@@ -758,8 +826,9 @@ def gather_whistles(coco_gt:COCO, coco_dt:COCO, filter_dt=0.95, valid_gt=False, 
                 dt_masks.append(mask)
             else:
                 continue
-
-        gt_whistles = [mask_to_whistle(mask) for mask in gt_masks]
+        
+        nested_gt_whistles = [mask_to_whistle(mask) for mask in gt_masks]
+        gt_whistles = [w for whistles in nested_gt_whistles for w in whistles]
         
         # bounds = []
         # gt_whistles_ = []
@@ -772,7 +841,8 @@ def gather_whistles(coco_gt:COCO, coco_dt:COCO, filter_dt=0.95, valid_gt=False, 
         #     gt_whistles_.append(whistle)
         # gt_whistles = gt_whistles_
 
-        dt_whistles = [mask_to_whistle(mask) for mask in dt_masks if mask.sum()>0]
+        nested_dt_whistles = [mask_to_whistle(mask) for mask in dt_masks if mask.sum()>0]
+        dt_whistles = [w for whistles in nested_dt_whistles for w in whistles]
         
         if debug:
             assert len(gt_whistles) == len(dt_whistles), f"gt and dt should have the \
