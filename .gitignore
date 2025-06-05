@@ -2,7 +2,7 @@
 /outputs
 
 */outputs
-
+mmdetection/checkpoints
 
 __pycache__
 *.egg-info

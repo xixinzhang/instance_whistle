@@ -92,7 +92,7 @@ data_preprocessor = dict(
         57.375,
     ],
     type='DetDataPreprocessor')
-data_root = '../data/spec_coco'
+data_root = '../data/cross/coco'
 dataset_type = 'CocoDataset'
 default_hooks = dict(
     checkpoint=dict(
@@ -470,7 +470,7 @@ pretrained = 'https://github.com/SwinTransformer/storage/releases/download/v1.0.
 resume = False
 test_cfg = dict(type='TestLoop')
 test_dataloader = dict(
-    batch_size=1,
+    batch_size=16,
     dataset=dict(
         metainfo = {
             'classes': ('whistle', ),
@@ -481,7 +481,7 @@ test_dataloader = dict(
         ann_file='labels.json',
         backend_args=None,
         data_prefix=dict(img='data/'),
-        data_root = '../data/spec_coco/val',
+        data_root = data_root+ '/val',
         pipeline=[
             dict(backend_args=None, to_float32=True, type='LoadImageFromFile'),
             dict(keep_ratio=True, scale=(
@@ -506,14 +506,14 @@ test_dataloader = dict(
     persistent_workers=True,
     sampler=dict(shuffle=False, type='DefaultSampler'))
 test_evaluator = dict(
-    ann_file='../data/spec_coco/val/labels.json',
+    ann_file=data_root + '/val/labels.json',
     backend_args=None,
     format_only=False,
     metric=[
-        'bbox',
+        # 'bbox',
         'segm',
     ],
-    type='CocoMetric')
+    type='WhistleMetric2')
 test_pipeline = [
     dict(backend_args=None, to_float32=True, type='LoadImageFromFile'),
     dict(keep_ratio=True, scale=(
@@ -555,7 +555,7 @@ train_dataloader = dict(
         backend_args=None,
         data_prefix=dict(
             img='data/'),
-        data_root = '../data/spec_coco/train',
+        data_root = data_root+ '/train',
         filter_cfg=dict(filter_empty_gt=True, min_size=32),
         pipeline=[
             dict(backend_args=None, to_float32=True, type='LoadImageFromFile'),
@@ -631,7 +631,7 @@ train_pipeline = [
 ]
 val_cfg = dict(type='ValLoop')
 val_dataloader = dict(
-    batch_size=1,
+    batch_size=16,
     dataset=dict(
         metainfo = {
             'classes': ('whistle', ),
@@ -642,7 +642,7 @@ val_dataloader = dict(
         ann_file='labels.json',
         backend_args=None,
         data_prefix=dict(img='data/'),
-        data_root = '../data/spec_coco/val',
+        data_root = data_root+ '/val',
         pipeline=[
             dict(backend_args=None, to_float32=True, type='LoadImageFromFile'),
             dict(keep_ratio=True, scale=(
@@ -667,14 +667,14 @@ val_dataloader = dict(
     persistent_workers=True,
     sampler=dict(shuffle=False, type='DefaultSampler'))
 val_evaluator = dict(
-    ann_file='../data/spec_coco/val/labels.json',
+    ann_file=data_root+ '/val/labels.json',
     backend_args=None,
     format_only=False,
     metric=[
-        'bbox',
+        # 'bbox',
         'segm',
     ],
-    type='CocoMetric')
+    type='WhistleMetric2')
 vis_backends = [
     dict(type='LocalVisBackend'),
 ]
@@ -685,4 +685,4 @@ visualizer = dict(
         dict(type='LocalVisBackend'),
         dict(type='TensorboardVisBackend')
     ])
-work_dir = './work_dirs/mask2former_swin-t-p4-w7-224_8xb2-lsj-50e_coco'
+work_dir = './work_dirs/mask2former_swin-t-p4-w7-224_8xb2-lsj-50e_whistle_cross'

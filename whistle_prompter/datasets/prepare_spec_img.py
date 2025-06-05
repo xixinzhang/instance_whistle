@@ -210,7 +210,7 @@ if __name__ == "__main__":
 
 
     # filenames = filenames[:1]
-    # filenames = '/home/xzhang3906/storage/DCLDE/whale_whistle/bottlenose/palmyra092007FS192-070924-205305.wav'
+    filenames = '/home/xzhang3906/Desktop/projects/whistle_prompter/data/cross/audio/Qx-Tt-SCI0608-N1-060814-123433.wav'
     # with open("data/meta.json") as f:
     #     meta = json.load(f)
     # filenames = [f'data/audio/{f}.wav' for f in meta['data']["test"]]

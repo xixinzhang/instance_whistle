@@ -13,9 +13,27 @@
             "console": "integratedTerminal",
             "justMyCode": false,
             "args": [
-                "../configs/mask2former_r50_8xb2-lsj-50e_whistle_cross.py",
-                "work_dirs/mask2former_r50_8xb2-lsj-50e_whistle_cross/iter_368750.pth"
+                // "../configs/mask2former_r50_8xb2-lsj-50e_whistle_cross.py",
+                // "work_dirs/mask2former_r50_8xb2-lsj-50e_whistle_cross/iter_368750.pth"
+                "../configs/mask2former_sam.py",
+                "work_dirs/mask2former_sam/iter_200.pth"
+
             ],
+        },
+        {
+            "name": "mask2former train Debug",
+            "type": "debugpy",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/mmdetection",
+            "program": "tools/train.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "../configs/mask2former_sam.py",
+            ],
+            "env": {
+                "PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT": "2"
+            }
         },
         {
             "name": "Visualize results",

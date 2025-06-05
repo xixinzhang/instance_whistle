@@ -282,6 +282,7 @@ class WhistleMetric2(BaseMetric):
 
         # DEBUG: 
         # stems = ['palmyra092007FS192-070924-205305']
+        stems = ['Qx-Tt-SCI0608-N1-060814-123433']
 
         # add img_id in same audio file
         audio_to_img = defaultdict(dict)
@@ -300,7 +301,7 @@ class WhistleMetric2(BaseMetric):
 
             # dt eval 
             img_to_frames = {img_id: start_frame for img_id, start_frame in zip(image_ids, sorted_frames)} 
-            filter_dt = 0.9
+            filter_dt = 0.8
             result_whistle = self.results2whistles(preds, img_ids, filter_dt=filter_dt)  # {img_id: {id: whistle ...} }
             coco_whistles = {img_to_frames[img_id]: whistles for img_id, whistles in result_whistle.items()}  # {start_frame: {id: whistle} ...}
 
@@ -318,6 +319,7 @@ class WhistleMetric2(BaseMetric):
             dt_whistles = []  # Will contain both merged and non-merged whistles
             frame_width = 1500  # 1500 pixels = 300ms (since 1 pixel = 0.2ms)
             freq_height = 769  # 769 pixels = 125Hz (since 1 pixel = 125Hz)
+            top_cutoff = 368
 
             sorted_frames = sorted(coco_whistles.keys())
             # Track whistles that have already been merged to avoid re-merging
@@ -399,7 +401,40 @@ class WhistleMetric2(BaseMetric):
 
             # Add merged whistles to the complete list
             dt_whistles.extend(merged_whistles)
+            
+            # Filter out whistle segments that are outside the frequency range
+            filtered_dt_whistles = []
+            for whistle in dt_whistles:
+                # Find points that are below the top_cutoff (points below top_cutoff are valid)
+                valid_indices = whistle[:, 1] > top_cutoff
+                
+                # If no valid points, skip this whistle entirely
+                if not np.any(valid_indices):
+                    continue
+                
+                # Find continuous segments above the cutoff
+                segments = []
+                current_segment = []
+                for i, (point, is_valid) in enumerate(zip(whistle, valid_indices)):
+                    if is_valid:
+                        current_segment.append(point)
+                    elif current_segment:  # End of a valid segment
+                        if len(current_segment) > 10:  # remove too short segments
+                            segments.append(np.array(current_segment))
+                        current_segment = []
+                
+                # Don't forget the last segment if it exists
+                if current_segment and len(current_segment) > 10:
+                    segments.append(np.array(current_segment))
+                
+                # Add all valid segments to our filtered list
+                filtered_dt_whistles.extend(segments)
+            dt_whistles = filtered_dt_whistles
 
+
+            
+
+            # save the whistles to binary file
             dt_whistles_tf = [pix_to_tf(whistle, height=freq_height) for whistle in dt_whistles]
             tonnal_save(dt_whistles_tf, stem)
 
@@ -709,7 +744,7 @@ def bezier_grid_path(points, start_idx, end_idx, steps=10):
     
     return grid_path
 
-def mask_to_whistle(mask, method='bresenham', max_gap=25, min_segment_ratio = 0.5):
+def mask_to_whistle(mask, method='bresenham', max_gap=25, min_segment_ratio = 0.1):
     """convert the instance mask to whistle contour, use skeleton methods
     
     Args
@@ -732,18 +767,22 @@ def mask_to_whistle(mask, method='bresenham', max_gap=25, min_segment_ratio = 0.
     # Split into segments based on point distances
     segments = []
     current_segment = [whistle[0]]
-    
+    skip_pre = False
+
     for i in range(1, len(whistle)):
-        prev_point = whistle[i-1]
         current_point = whistle[i]
-        
-        # Calculate distance between consecutive points
-        distance = np.linalg.norm(current_point - prev_point)
-        
-        if distance <= max_gap:
-            current_segment.append(current_point)
+        if not skip_pre:
+            prev_point = whistle[i-1]
+        else:  
+            skip_pre = False
+
+        if abs(current_point[0] - prev_point[0]) < max_gap:
+            if abs(current_point[1] - prev_point[1]) < max_gap:
+                current_segment.append(current_point)
+            else: # skip outliers
+                skip_pre = True
+                continue  # Skip harmonics that are too far apart
         else:
-            # Close current segment and start new one
             segments.append(np.array(current_segment))
             current_segment = [current_point]
     segments.append(np.array(current_segment))
