@@ -1,5 +1,20 @@
 auto_scale_lr = dict(base_batch_size=16, enable=False)
 backend_args = None
+default_scope = 'mmdet'
+
+default_hooks = dict(
+    checkpoint=dict(
+        by_epoch=False,
+        interval=5000,
+        max_keep_ckpts=3,
+        save_last=True,
+        type='CheckpointHook'),
+    logger=dict(interval=50, type='LoggerHook'),
+    param_scheduler=dict(type='ParamSchedulerHook'),
+    sampler_seed=dict(type='DistSamplerSeedHook'),
+    timer=dict(type='IterTimerHook'),
+    visualization=dict(type='DetVisualizationHook'))
+
 batch_augments = [
     dict(
         img_pad_value=0,
@@ -44,19 +59,6 @@ data_preprocessor = dict(
     type='DetDataPreprocessor')
 data_root = '../data/cross/coco'
 dataset_type = 'CocoDataset'
-default_hooks = dict(
-    checkpoint=dict(
-        by_epoch=False,
-        interval=5000,
-        max_keep_ckpts=3,
-        save_last=True,
-        type='CheckpointHook'),
-    logger=dict(interval=50, type='LoggerHook'),
-    param_scheduler=dict(type='ParamSchedulerHook'),
-    sampler_seed=dict(type='DistSamplerSeedHook'),
-    timer=dict(type='IterTimerHook'),
-    visualization=dict(type='DetVisualizationHook'))
-default_scope = 'mmdet'
 dynamic_intervals = [
     (
         365001,

@@ -31,7 +31,7 @@ vis_backends = [
 visualizer = dict(
     name='visualizer',
     type='DetLocalVisualizer',
-    vis_backends= vis_backends,)
+    vis_backends= vis_backends)
 log_processor = dict(by_epoch=False, type='LogProcessor', window_size=50)
 
 log_level = 'INFO'
@@ -238,7 +238,8 @@ train_pipeline = [
 test_pipeline = [
     dict(backend_args=None, to_float32=True, type='LoadImageFromFile'),
     dict(type='Resize', scale=crop_size, keep_ratio=True),
-    dict(type='Pad', size=crop_size, pad_val=dict(img=(0.406 * 255, 0.456 * 255, 0.485 * 255), masks=0)),
+    # dict(type='Pad', size=crop_size, pad_val=dict(img=(0.406 * 255, 0.456 * 255, 0.485 * 255), masks=0)),
+    dict(type='Pad', size=crop_size),
     dict(type='LoadAnnotations', with_bbox=True, with_mask=True),
     dict(
         meta_keys=(
@@ -308,7 +309,7 @@ val_dataloader = dict(
 
 
 test_dataloader = dict(
-    batch_size=4,
+    batch_size=1,
     drop_last=False,
     num_workers=num_workers,
     persistent_workers=True,
@@ -374,20 +375,20 @@ param_scheduler = dict(
     type='MultiStepLR')
 
 custom_keys=dict(
-        backbone=dict(decay_mult=1.0, lr_mult=0.05),
+        backbone=dict(decay_mult=1.0, lr_mult=0.1),
         level_embed=dict(decay_mult=0.0, lr_mult=1.0),
         query_embed=dict(decay_mult=0.0, lr_mult=1.0),
         query_feat=dict(decay_mult=0.0, lr_mult=1.0))
 
 for i in range(12):
     custom_keys[f'backbone.vision_encoder.layers.{i}.layer_norm1'] = dict(
-        decay_mult=0.0, lr_mult=0.05)
+        decay_mult=0.0, lr_mult=0.1)
     custom_keys[f'backbone.vision_encoder.layers.{i}.layer_norm2'] = dict(
-        decay_mult=0.0, lr_mult=0.05)
+        decay_mult=0.0, lr_mult=0.1)
 custom_keys['backbone.vision_encoder.neck.layer_norm1'] = dict(
-    decay_mult=0.0, lr_mult=0.05)
+    decay_mult=0.0, lr_mult=0.1)
 custom_keys['backbone.vision_encoder.neck.layer_norm2'] = dict(
-    decay_mult=0.0, lr_mult=0.05)
+    decay_mult=0.0, lr_mult=0.1)
     
 
 optim_wrapper = dict(

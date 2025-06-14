@@ -1,99 +1,9 @@
-auto_scale_lr = dict(base_batch_size=16, enable=False)
-backbone_embed_multi = dict(decay_mult=0.0, lr_mult=0.1)
-backbone_norm_multi = dict(decay_mult=0.0, lr_mult=0.1)
+auto_scale_lr = dict(enable=False, base_batch_size=16)
 backend_args = None
-batch_augments = [
-    dict(
-        img_pad_value=0,
-        mask_pad_value=0,
-        pad_mask=True,
-        pad_seg=False,
-        size=(
-            1024,
-            1024,
-        ),
-        type='BatchFixedSizePad'),
-]
-custom_keys = dict({
-    'absolute_pos_embed':
-    dict(decay_mult=0.0, lr_mult=0.1),
-    'backbone':
-    dict(decay_mult=1.0, lr_mult=0.1),
-    'backbone.norm':
-    dict(decay_mult=0.0, lr_mult=0.1),
-    'backbone.patch_embed.norm':
-    dict(decay_mult=0.0, lr_mult=0.1),
-    'backbone.stages.0.blocks.0.norm':
-    dict(decay_mult=0.0, lr_mult=0.1),
-    'backbone.stages.0.blocks.1.norm':
-    dict(decay_mult=0.0, lr_mult=0.1),
-    'backbone.stages.0.downsample.norm':
-    dict(decay_mult=0.0, lr_mult=0.1),
-    'backbone.stages.1.blocks.0.norm':
-    dict(decay_mult=0.0, lr_mult=0.1),
-    'backbone.stages.1.blocks.1.norm':
-    dict(decay_mult=0.0, lr_mult=0.1),
-    'backbone.stages.1.downsample.norm':
-    dict(decay_mult=0.0, lr_mult=0.1),
-    'backbone.stages.2.blocks.0.norm':
-    dict(decay_mult=0.0, lr_mult=0.1),
-    'backbone.stages.2.blocks.1.norm':
-    dict(decay_mult=0.0, lr_mult=0.1),
-    'backbone.stages.2.blocks.2.norm':
-    dict(decay_mult=0.0, lr_mult=0.1),
-    'backbone.stages.2.blocks.3.norm':
-    dict(decay_mult=0.0, lr_mult=0.1),
-    'backbone.stages.2.blocks.4.norm':
-    dict(decay_mult=0.0, lr_mult=0.1),
-    'backbone.stages.2.blocks.5.norm':
-    dict(decay_mult=0.0, lr_mult=0.1),
-    'backbone.stages.2.downsample.norm':
-    dict(decay_mult=0.0, lr_mult=0.1),
-    'backbone.stages.3.blocks.0.norm':
-    dict(decay_mult=0.0, lr_mult=0.1),
-    'backbone.stages.3.blocks.1.norm':
-    dict(decay_mult=0.0, lr_mult=0.1),
-    'level_embed':
-    dict(decay_mult=0.0, lr_mult=1.0),
-    'query_embed':
-    dict(decay_mult=0.0, lr_mult=1.0),
-    'query_feat':
-    dict(decay_mult=0.0, lr_mult=1.0),
-    'relative_position_bias_table':
-    dict(decay_mult=0.0, lr_mult=0.1)
-})
-data_preprocessor = dict(
-    batch_augments=[
-        dict(
-            img_pad_value=0,
-            mask_pad_value=0,
-            pad_mask=True,
-            pad_seg=False,
-            size=(
-                1024,
-                1024,
-            ),
-            type='BatchFixedSizePad'),
-    ],
-    bgr_to_rgb=True,
-    mask_pad_value=0,
-    mean=[
-        123.675,
-        116.28,
-        103.53,
-    ],
-    pad_mask=True,
-    pad_seg=False,
-    pad_size_divisor=32,
-    seg_pad_value=255,
-    std=[
-        58.395,
-        57.12,
-        57.375,
-    ],
-    type='DetDataPreprocessor')
-data_root = '../data/cross/coco'
-dataset_type = 'CocoDataset'
+default_scope = 'mmdet'
+work_dir = './work_dirs/mask2former_swin-t-p4-w7-224_8xb2-lsj-50e_whistle_cross'
+
+
 default_hooks = dict(
     checkpoint=dict(
         by_epoch=False,
@@ -106,7 +16,58 @@ default_hooks = dict(
     sampler_seed=dict(type='DistSamplerSeedHook'),
     timer=dict(type='IterTimerHook'),
     visualization=dict(type='DetVisualizationHook'))
-default_scope = 'mmdet'
+
+env_cfg = dict(
+    cudnn_benchmark=False,
+    mp_cfg=dict(mp_start_method='fork', opencv_num_threads=0),
+    dist_cfg=dict(backend='nccl'),
+)
+
+vis_backends = [
+    dict(type='LocalVisBackend'),
+    dict(type='TensorboardVisBackend')
+]
+
+visualizer = dict(
+    name='visualizer',
+    type='DetLocalVisualizer',
+    vis_backends=vis_backends)
+log_processor = dict(by_epoch=False, type='LogProcessor', window_size=50)
+
+
+load_from = 'checkpoints/mask2former_swin-t-p4-w7-224_8xb2-lsj-50e_coco_20220508_091649-01b0f990.pth'
+log_level = 'INFO'
+
+num_things_classes = 1
+num_stuff_classes = 0
+num_classes = num_things_classes + num_stuff_classes
+
+crop_size = (1024, 1024)
+
+batch_augments = [
+    dict(
+        type='BatchFixedSizePad',
+        size=crop_size,
+        img_pad_value=0,
+        pad_mask=True,
+        mask_pad_value=0,
+        pad_seg=False,)
+]
+
+data_preprocessor = dict(
+    batch_augments=batch_augments,
+    bgr_to_rgb=True,
+    mask_pad_value=0,
+    mean=[123.675, 116.28, 103.53],
+    pad_mask=True,
+    pad_seg=False,
+    pad_size_divisor=32,
+    seg_pad_value=255,
+    std=[58.395, 57.12, 57.375],
+    type='DetDataPreprocessor')
+
+data_root = '../data/cross/coco'
+dataset_type = 'CocoDataset'
 depths = [
     2,
     2,
@@ -120,19 +81,12 @@ dynamic_intervals = [
     ),
 ]
 embed_multi = dict(decay_mult=0.0, lr_mult=1.0)
-env_cfg = dict(
-    cudnn_benchmark=False,
-    dist_cfg=dict(backend='nccl'),
-    mp_cfg=dict(mp_start_method='fork', opencv_num_threads=0))
 image_size = (
     1024,
     1024,
 )
 interval = 5000
 launcher = 'none'
-load_from = 'checkpoints/mask2former_swin-t-p4-w7-224_8xb2-lsj-50e_coco_20220508_091649-01b0f990.pth'
-log_level = 'INFO'
-log_processor = dict(by_epoch=False, type='LogProcessor', window_size=50)
 max_iters = 368750
 model = dict(
     backbone=dict(
@@ -206,7 +160,7 @@ model = dict(
         init_cfg=None,
         loss_panoptic=None,
         num_stuff_classes=0,
-        num_things_classes=80,
+        num_things_classes=1,
         type='MaskFormerFusionHead'),
     panoptic_head=dict(
         enforce_decoder_input_project=False,
@@ -219,85 +173,6 @@ model = dict(
         ],
         loss_cls=dict(
             class_weight=[
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
                 1.0,
                 0.1,
             ],
@@ -320,7 +195,7 @@ model = dict(
             use_sigmoid=True),
         num_queries=100,
         num_stuff_classes=0,
-        num_things_classes=80,
+        num_things_classes=1,
         num_transformer_feat_level=3,
         out_channels=256,
         pixel_decoder=dict(
@@ -393,7 +268,7 @@ model = dict(
     type='Mask2Former')
 num_classes = 1
 num_stuff_classes = 0
-num_things_classes = 80
+num_things_classes = 1
 optim_wrapper = dict(
     clip_grad=dict(max_norm=0.01, norm_type=2),
     optimizer=dict(
@@ -481,7 +356,7 @@ test_dataloader = dict(
         ann_file='labels.json',
         backend_args=None,
         data_prefix=dict(img='data/'),
-        data_root = data_root+ '/val',
+        data_root = data_root+ '/test',
         pipeline=[
             dict(backend_args=None, to_float32=True, type='LoadImageFromFile'),
             dict(keep_ratio=True, scale=(
@@ -506,7 +381,7 @@ test_dataloader = dict(
     persistent_workers=True,
     sampler=dict(shuffle=False, type='DefaultSampler'))
 test_evaluator = dict(
-    ann_file=data_root + '/val/labels.json',
+    ann_file=data_root + '/test/labels.json',
     backend_args=None,
     format_only=False,
     metric=[
@@ -675,14 +550,4 @@ val_evaluator = dict(
         'segm',
     ],
     type='WhistleMetric2')
-vis_backends = [
-    dict(type='LocalVisBackend'),
-]
-visualizer = dict(
-    name='visualizer',
-    type='DetLocalVisualizer',
-    vis_backends=[
-        dict(type='LocalVisBackend'),
-        dict(type='TensorboardVisBackend')
-    ])
-work_dir = './work_dirs/mask2former_swin-t-p4-w7-224_8xb2-lsj-50e_whistle_cross'
+
