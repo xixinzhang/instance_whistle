@@ -233,8 +233,15 @@ class MaskFormerFusionHead(BasePanopticFusionHead):
         for mask_cls_result, mask_pred_result, meta in zip(
                 mask_cls_results, mask_pred_results, batch_img_metas):
             # remove padding
-            img_height, img_width = meta['img_shape'][:2]
-            mask_pred_result = mask_pred_result[:, :img_height, :img_width]
+            # img_height, img_width = meta['img_shape'][:2]
+            # mask_pred_result = mask_pred_result[:, :img_height, :img_width]
+
+            # remove padding
+            ori_img_height, ori_img_width = meta['ori_shape'][:2]
+            scale_factor = meta['scale_factor']
+            ori_scaled_height = int(ori_img_height * scale_factor[1])
+            ori_scaled_width = int(ori_img_width * scale_factor[0])
+            mask_pred_result = mask_pred_result[:, :ori_scaled_height, :ori_scaled_width]
 
             if rescale:
                 # return result in original resolution

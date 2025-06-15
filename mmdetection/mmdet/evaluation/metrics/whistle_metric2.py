@@ -277,7 +277,7 @@ class WhistleMetric2(BaseMetric):
         # split gt and prediction list
         _, preds = zip(*results)
 
-        stems = json.load(open('/home/xzhang3906/Desktop/projects/whistle_prompter/data/cross/meta.json'))
+        stems = json.load(open('../data/cross/meta.json'))
         stems = stems['test']
 
         # DEBUG: 
@@ -438,7 +438,7 @@ class WhistleMetric2(BaseMetric):
             dt_whistles_tf = [pix_to_tf(whistle, height=freq_height) for whistle in dt_whistles]
             tonnal_save(dt_whistles_tf, stem)
 
-            binfile = os.path.join('/home/xzhang3906/Desktop/projects/whistle_prompter/data/cross/anno', f'{stem}.bin')
+            binfile = os.path.join('../data/cross/anno', f'{stem}.bin')
             gt_tonals = utils.load_annotation(binfile)
 
             def unique_pix(traj):

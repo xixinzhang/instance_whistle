@@ -1305,6 +1305,7 @@ class SAMSegMask2Former(Mask2Former):
         #     self.backbone.eval()
         #     for param in self.backbone.parameters():
         #         param.requires_grad = False
+    
 
     def extract_feat(self, batch_inputs: Tensor) -> Tuple[Tensor]:
         vision_outputs = self.backbone(batch_inputs)
@@ -1316,8 +1317,10 @@ class SAMSegMask2Former(Mask2Former):
             vision_hidden_states = vision_outputs
         else:
             raise NotImplementedError
-
-        x = self.neck(vision_hidden_states)
+        if self.with_neck:
+            x = self.neck(vision_hidden_states)
+        else:
+            x = (image_embeddings, ) * len(vision_hidden_states)
         return x
 
 

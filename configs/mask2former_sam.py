@@ -309,7 +309,7 @@ val_dataloader = dict(
 
 
 test_dataloader = dict(
-    batch_size=1,
+    batch_size=8,
     drop_last=False,
     num_workers=num_workers,
     persistent_workers=True,
@@ -386,9 +386,9 @@ for i in range(12):
     custom_keys[f'backbone.vision_encoder.layers.{i}.layer_norm2'] = dict(
         decay_mult=0.0, lr_mult=0.1)
 custom_keys['backbone.vision_encoder.neck.layer_norm1'] = dict(
-    decay_mult=0.0, lr_mult=0.1)
+    decay_mult=0.0, lr_mult=1)
 custom_keys['backbone.vision_encoder.neck.layer_norm2'] = dict(
-    decay_mult=0.0, lr_mult=0.1)
+    decay_mult=0.0, lr_mult=1)
     
 
 optim_wrapper = dict(
@@ -399,7 +399,7 @@ optim_wrapper = dict(
             0.999,
         ),
         eps=1e-08,
-        lr=0.0001/8,
+        lr=0.0001,
         type='AdamW',
         weight_decay=0.05),
     paramwise_cfg=dict(
