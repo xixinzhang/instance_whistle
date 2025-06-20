@@ -1,7 +1,7 @@
 auto_scale_lr = dict(enable=False, base_batch_size=16)
 backend_args = None
 default_scope = 'mmdet'
-work_dir = './work_dirs/mask2former_sam'
+work_dir = './work_dirs/mask2former_sam_lrd8'
 custom_imports = dict(imports=['mmdet.rsprompter'], allow_failed_imports=False)
 
 default_hooks = dict(
@@ -399,7 +399,7 @@ optim_wrapper = dict(
             0.999,
         ),
         eps=1e-08,
-        lr=0.0001,
+        lr=0.0001/8,
         type='AdamW',
         weight_decay=0.05),
     paramwise_cfg=dict(
