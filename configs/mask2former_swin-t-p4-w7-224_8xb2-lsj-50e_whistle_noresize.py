@@ -1,7 +1,7 @@
 auto_scale_lr = dict(enable=False, base_batch_size=16)
 backend_args = None
 default_scope = 'mmdet'
-work_dir = './work_dirs/mask2former_swin-t-p4-w7-224_8xb2-lsj-50e_whistle_cross'
+work_dir = f'./work_dirs/mask2former_swin-t-p4-w7-224_8xb2-lsj-50e_whistle_noresize'
 
 
 default_hooks = dict(
@@ -42,7 +42,7 @@ num_things_classes = 1
 num_stuff_classes = 0
 num_classes = num_things_classes + num_stuff_classes
 
-crop_size = (1024, 1024)
+crop_size = (769, 1500)
 
 batch_augments = [
     dict(
@@ -82,8 +82,8 @@ dynamic_intervals = [
 ]
 embed_multi = dict(decay_mult=0.0, lr_mult=1.0)
 image_size = (
-    1024,
-    1024,
+    769,
+    1500,
 )
 interval = 5000
 launcher = 'none'
@@ -133,8 +133,8 @@ model = dict(
                 pad_mask=True,
                 pad_seg=False,
                 size=(
-                    1024,
-                    1024,
+                    769,
+                    1500,
                 ),
                 type='BatchFixedSizePad'),
         ],
@@ -359,10 +359,6 @@ test_dataloader = dict(
         data_root = data_root+ '/val2',
         pipeline=[
             dict(backend_args=None, to_float32=True, type='LoadImageFromFile'),
-            dict(keep_ratio=True, scale=(
-                1333,
-                800,
-            ), type='Resize'),
             dict(type='LoadAnnotations', with_bbox=True, with_mask=True),
             dict(
                 meta_keys=(
@@ -391,10 +387,6 @@ test_evaluator = dict(
     type='WhistleMetric2')
 test_pipeline = [
     dict(backend_args=None, to_float32=True, type='LoadImageFromFile'),
-    dict(keep_ratio=True, scale=(
-        1333,
-        800,
-    ), type='Resize'),
     dict(type='LoadAnnotations', with_bbox=True, with_mask=True),
     dict(
         meta_keys=(
@@ -437,27 +429,6 @@ train_dataloader = dict(
             dict(type='LoadAnnotations', with_bbox=True, with_mask=True),
             # dict(prob=0.5, type='RandomFlip'),
             dict(
-                keep_ratio=True,
-                ratio_range=(
-                    0.1,
-                    2.0,
-                ),
-                resize_type='Resize',
-                scale=(
-                    1024,
-                    1024,
-                ),
-                type='RandomResize'),
-            dict(
-                allow_negative_crop=True,
-                crop_size=(
-                    1024,
-                    1024,
-                ),
-                crop_type='absolute',
-                recompute_bbox=True,
-                type='RandomCrop'),
-            dict(
                 by_mask=True,
                 min_gt_bbox_wh=(
                     1e-05,
@@ -473,28 +444,6 @@ train_dataloader = dict(
 train_pipeline = [
     dict(backend_args=None, to_float32=True, type='LoadImageFromFile'),
     dict(type='LoadAnnotations', with_bbox=True, with_mask=True),
-    # dict(prob=0.5, type='RandomFlip'),
-    dict(
-        keep_ratio=True,
-        ratio_range=(
-            0.1,
-            2.0,
-        ),
-        resize_type='Resize',
-        scale=(
-            1024,
-            1024,
-        ),
-        type='RandomResize'),
-    dict(
-        allow_negative_crop=True,
-        crop_size=(
-            1024,
-            1024,
-        ),
-        crop_type='absolute',
-        recompute_bbox=True,
-        type='RandomCrop'),
     dict(
         by_mask=True,
         min_gt_bbox_wh=(
@@ -517,13 +466,9 @@ val_dataloader = dict(
         ann_file='labels.json',
         backend_args=None,
         data_prefix=dict(img='data/'),
-        data_root = data_root+ '/val',
+        data_root = data_root+ '/val2',
         pipeline=[
             dict(backend_args=None, to_float32=True, type='LoadImageFromFile'),
-            dict(keep_ratio=True, scale=(
-                1333,
-                800,
-            ), type='Resize'),
             dict(type='LoadAnnotations', with_bbox=True, with_mask=True),
             dict(
                 meta_keys=(
@@ -542,7 +487,7 @@ val_dataloader = dict(
     persistent_workers=True,
     sampler=dict(shuffle=False, type='DefaultSampler'))
 val_evaluator = dict(
-    ann_file=data_root+ '/val/labels.json',
+    ann_file=data_root+ '/val2/labels.json',
     backend_args=None,
     format_only=False,
     metric=[

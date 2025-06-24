@@ -196,11 +196,11 @@ if __name__ == "__main__":
     parser.add_argument("--output_dir", type=str, default="data/coco")
     args = parser.parse_args()
 
-    with open("data/cross/meta.json") as f:
-        meta = json.load(f)
-    filenames = []
-    for stem in meta["test"]:
-        filenames.append(f"data/cross/audio/{stem}.wav")
+    # with open("data/cross/meta.json") as f:
+    #     meta = json.load(f)
+    # filenames = []
+    # for stem in meta["test"]:
+    #     filenames.append(f"data/cross/audio/{stem}.wav")
 
     # filenames = []
     # root_dir = os.path.expanduser("~/storage/DCLDE/whale_whistle")
@@ -209,15 +209,16 @@ if __name__ == "__main__":
     #     filenames.extend(glob.glob(os.path.join(root_dir, s, "*.wav")))
 
 
-    # filenames = filenames[:1]
-    filenames = '/home/xzhang3906/Desktop/projects/whistle_prompter/data/cross/audio/Qx-Tt-SCI0608-N1-060814-123433.wav'
+    # filenames = filenames[:2]
+    # filenames = 'data/cross/audio/Qx-Tt-SCI0608-N1-060814-123433.wav'
+    filenames = 'data/cross/audio/Qx-Tt-SCI0608-N1-060814-121518.wav'
     # with open("data/meta.json") as f:
     #     meta = json.load(f)
     # filenames = [f'data/audio/{f}.wav' for f in meta['data']["test"]]
 
     segments_dict = audios_to_segments_dict(filenames)
     print(segments_dict.keys())
-    save_specs_img(segments_dict, args.raw_spec, cmap=args.cmap, line_width=args.line_width, filter_empty_gt=True)
+    save_specs_img(segments_dict, args.raw_spec, filter_empty_gt=False, cmap=args.cmap, line_width=args.line_width)
     # split_specs_dataset(f"{args.raw_spec}/labels.json", f'{args.raw_spec}/data', args.output_dir)
 
-    
+    split_specs_dataset(f"{args.raw_spec}/labels.json", f'{args.raw_spec}/data', args.output_dir)

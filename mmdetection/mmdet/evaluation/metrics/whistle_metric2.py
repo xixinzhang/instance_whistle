@@ -13,6 +13,8 @@ from skimage.morphology import skeletonize
 from copy import deepcopy
 
 import numpy as np
+from scipy.signal import medfilt2d
+import librosa
 import torch
 import copy
 from mmengine.evaluator import BaseMetric
@@ -282,7 +284,10 @@ class WhistleMetric2(BaseMetric):
 
         # DEBUG: 
         # stems = ['palmyra092007FS192-070924-205305']
-        stems = ['Qx-Tt-SCI0608-N1-060814-123433']
+        # stems = ['Qx-Tt-SCI0608-N1-060814-123433']
+        stems = ['Qx-Tt-SCI0608-N1-060814-121518']
+        # stems = ['Qx-Tt-SCI0608-N1-060814-123433', 'Qx-Tt-SCI0608-N1-060814-121518']
+        # stems = stems[:2]
 
         # add img_id in same audio file
         audio_to_img = defaultdict(dict)
@@ -431,15 +436,20 @@ class WhistleMetric2(BaseMetric):
                 filtered_dt_whistles.extend(segments)
             dt_whistles = filtered_dt_whistles
 
-
-            
-
             # save the whistles to binary file
-            dt_whistles_tf = [pix_to_tf(whistle, height=freq_height) for whistle in dt_whistles]
-            tonnal_save(dt_whistles_tf, stem)
+            waveform, sample_rate = load_wave_file(f'../data/cross/audio/{stem}.wav')
+            spect_power_db= wave_to_spect(waveform, sample_rate)
+            H, W = spect_power_db.shape[-2:]
+            spect_snr = np.zeros_like(spect_power_db)
+            block_size = 1500  # 300ms
+            broadband = 0.01
+            for i in range(0, H, block_size):
+                spect_snr[i:i+block_size] = snr_spect(spect_power_db[i:i+block_size], click_thr_db=10, broadband_thr_n=broadband*H )
+            spect_snr = np.flipud(spect_snr) # flip frequency axis, low freq at the bottom
+            tonals_snr = [spect_snr[w[:, 1].astype(int),w[:, 0].astype(int)] for w in dt_whistles]
 
-            binfile = os.path.join('../data/cross/anno', f'{stem}.bin')
-            gt_tonals = utils.load_annotation(binfile)
+            dt_whistles_tf = [pix_to_tf(whistle, height=freq_height) for whistle in dt_whistles]
+            tonal_save(stem, dt_whistles_tf, tonals_snr, model_name='mask2former')
 
             def unique_pix(traj):
                 unique_x = np.unique(traj[:, 0])
@@ -449,7 +459,9 @@ class WhistleMetric2(BaseMetric):
                     averaged_y[i] = int(np.round(np.mean(y_values)))
                 unique_traj = np.column_stack((unique_x, averaged_y))
                 return unique_traj
-
+            
+            binfile = os.path.join('../data/cross/anno', f'{stem}.bin')
+            gt_tonals = utils.load_annotation(binfile)
             gt_tonals_pix = []
             for i, gt_traj in enumerate(gt_tonals):
                 traj_pix = utils.tf_to_pix(gt_traj, width=np.inf)
@@ -467,16 +479,85 @@ class WhistleMetric2(BaseMetric):
         rprint(f'gathered {sum_gts} gt whistles, {sum_dts} dt whistles within')
         eval_results = OrderedDict()
 
-        res = accumulate_wistle_results(img_to_whistles, valid_gt=True, valid_len = 75, deviation_tolerence= 350/125)
+        res = accumulate_wistle_results(img_to_whistles, debug=True, valid_gt=True, valid_len = 75, deviation_tolerence= 350/125, )
         summary = summarize_whistle_results(res)
         rprint(summary)
 
         return eval_results
 
+def wave_to_spect(
+        waveform, 
+        sample_rate=None,
+        frame_ms=8, 
+        hop_ms=2, 
+        pad=0, 
+        n_fft=None, 
+        hop_length=None, 
+        top_db=None, 
+        center = False, 
+        amin = 1e-16, 
+        **kwargs
+    ):
+    """Convert waveform to raw spectrogram in power dB scale."""
+    # fft params
+    if n_fft is None:
+        if frame_ms is not None and sample_rate is not None:
+            n_fft = int(frame_ms * sample_rate / 1000)
+        else:
+            raise ValueError("n_fft or frame_ms must be provided.")
+    if hop_length is None:
+        if hop_ms is not None and sample_rate is not None:
+            hop_length = int(hop_ms * sample_rate / 1000)
+        else:
+            raise ValueError("hop_length or hop_ms must be provided.")
+
+    # spectrogram magnitude
+    spect = librosa.stft(
+        waveform,
+        n_fft=n_fft,
+        hop_length=hop_length,
+        win_length=n_fft,
+        window='hamming',
+        center=center,
+        pad_mode='reflect',
+    )
+    # decibel scale spectrogram with cutoff specified by top_db
+    spect_power_db = librosa.amplitude_to_db(
+        np.abs(spect),
+        ref=1.0,
+        amin=amin,
+        top_db=top_db,
+    )
+    return spect_power_db # (freq, time)
+
+def load_wave_file(file_path, type='numpy'):
+    """Load one wave file."""
+    if type == 'numpy':
+        waveform, sample_rate = librosa.load(file_path, sr=None)
+    elif type == 'tensor':
+        import torchaudio
+        waveform, sample_rate = torchaudio.load(file_path)
+    return waveform, sample_rate
+
+
+def snr_spect(spect_db, click_thr_db, broadband_thr_n):
+    meanf_db = np.mean(spect_db, axis=1, keepdims=True)
+    click_p = np.sum((spect_db - meanf_db) > click_thr_db, axis=0) > broadband_thr_n
+    use_p = ~click_p
+    spect_db = medfilt2d(spect_db, kernel_size=[3,3])
+    if np.sum(use_p) == 0:
+        # Qx-Dc-SC03-TAT09-060516-173000.wav 4500 no use_p
+        use_p = np.ones_like(click_p)
+    meanf_db = np.mean(spect_db[:, use_p], axis=1, keepdims=True)
+    snr_spect_db = spect_db - meanf_db
+    return snr_spect_db
+
+
+
 def pix_to_tf(pix, height):
     """Convert pixel coordinates to time-frequency coordinates."""
-    time = (pix[:, 0] + 0.5) * 0.002  # Convert to seconds
-    freq = (height - 1 - pix[:, 1] - 0.5) * 125  # Convert to frequency in Hz
+    time = (pix[:, 0]-0.5) * 0.002  # Convert to seconds
+    freq = (height - 1 - pix[:, 1] + 0.5) * 125  # Convert to frequency in Hz
     return np.column_stack((time, freq))
 
 @dataclass
@@ -484,7 +565,7 @@ class contour:
     time: float
     freq: float
 
-def tonnal_save(tonnals, stem, model_name = 'mask2former'):
+def tonal_save(stem, tonals, tonals_snr=None, model_name = 'mask2former'):
     """Save the tonnals to a silbido binary file
     Args:
         tonnals: list of tonnals array
@@ -496,10 +577,14 @@ def tonnal_save(tonnals, stem, model_name = 'mask2former'):
         }
     """
     # convert to dataclass
-    tonnals = [contour(time=tonnal[:, 0], freq=tonnal[:, 1]) for tonnal in tonnals]
-
-    from whistle_prompter.utils.write_bin import writeTimeFrequencyBinary
-    writeTimeFrequencyBinary(f'outputs/{stem}_{model_name}_dt.bin', tonnals)
+    filename = f'outputs/{stem}_{model_name}_dt.bin'
+    from whistle_prompter.utils.write_bin import writeTimeFrequencyBinary, writeContoursBinary
+    if tonals_snr is None:
+        tonals_ = [contour(time=tonal[:, 0], freq=tonal[:, 1]) for tonal in tonals]
+        writeTimeFrequencyBinary(filename, tonals_)
+    else:
+        tonals_ = [{'tfnodes': [{'time': tf[0], 'freq': tf[1], 'snr': snr} for tf, snr in zip(tfs, snrs)]} for tfs, snrs in zip(tonals, tonals_snr)]
+        writeContoursBinary(filename, tonals_, snr=True)
 
 
 def get_traj_valid(conf_map, traj):
@@ -1040,6 +1125,23 @@ def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, vali
         #         rprint(f'img_id: {img_id}, dt_id:{dt_fp_idx}, fp_num: {len(dt_false_pos_all)}')
         #         rprint(f'dt: {dts[dt_fp_idx]}')
         #         # rprint(f'gt: {gts[dt_fp_idx]}')
+        freq_height = 769
+        dt_false_pos_tf_all = [pix_to_tf(dts[idx], height=freq_height) for idx in dt_false_pos_all]
+
+        waveform, sample_rate = load_wave_file(f'../data/cross/audio/{img_id}.wav')
+        spect_power_db= wave_to_spect(waveform, sample_rate)
+        H, W = spect_power_db.shape[-2:]
+        spect_snr = np.zeros_like(spect_power_db)
+        block_size = 1500  # 300ms
+        broadband = 0.01
+        for i in range(0, H, block_size):
+            spect_snr[i:i+block_size] = snr_spect(spect_power_db[i:i+block_size], click_thr_db=10, broadband_thr_n=broadband*H )
+        spect_snr = np.flipud(spect_snr) # flip frequency axis, low freq at the bottom
+        tonals_snr = [spect_snr[dts[idx][:, 1].astype(int),dts[idx][:, 0].astype(int)]  for idx in dt_false_pos_all]
+        tonal_save(img_id, dt_false_pos_tf_all, tonals_snr, 'mask2former_r50_fp')
+        dt_snrs = [np.mean(snr) for snr in tonals_snr]
+        rprint({i+1: dt_snrs[i].item() for i in range(len(dt_snrs))})
+        rprint(f'stem: {img_id}, min_snr: {np.min(dt_snrs)}, max_snr: {np.max(dt_snrs)}, mean:{np.mean(dt_snrs)}, above 9: {np.sum(np.array(dt_snrs) > 9)}')
         pass
                 
     res = {

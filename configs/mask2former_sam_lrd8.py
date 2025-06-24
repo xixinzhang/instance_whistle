@@ -325,7 +325,7 @@ test_dataloader = dict(
         ann_file='labels.json',
         backend_args=None,
         data_prefix=dict(img='data/'),
-        data_root=data_root + '/test',
+        data_root=data_root + '/val2',
         pipeline=test_pipeline,
         test_mode=True),
 )
@@ -341,7 +341,7 @@ val_evaluator = dict(
     type='WhistleMetric2')
 
 test_evaluator = dict(
-    ann_file= data_root + '/test/labels.json',
+    ann_file= data_root + '/val2/labels.json',
     # ann_file='../data/cross/coco/val/labels.json',
     backend_args=None,
     format_only=False,

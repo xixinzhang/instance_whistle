@@ -238,7 +238,7 @@ class MaskFormerFusionHead(BasePanopticFusionHead):
 
             # remove padding
             ori_img_height, ori_img_width = meta['ori_shape'][:2]
-            scale_factor = meta['scale_factor']
+            scale_factor = meta.get('scale_factor', (1.0, 1.0))
             ori_scaled_height = int(ori_img_height * scale_factor[1])
             ori_scaled_width = int(ori_img_width * scale_factor[0])
             mask_pred_result = mask_pred_result[:, :ori_scaled_height, :ori_scaled_width]
