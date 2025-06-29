@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 import datetime
 import itertools
+import  yaml
 import json
 import os.path as osp
 import tempfile
@@ -278,14 +279,13 @@ class WhistleMetric2(BaseMetric):
 
         # split gt and prediction list
         _, preds = zip(*results)
-
-        stems = json.load(open('../data/cross/meta.json'))
+        stems = yaml.safe_load(open('../data/cross/meta.yaml'))
         stems = stems['test']
 
         # DEBUG: 
         # stems = ['palmyra092007FS192-070924-205305']
         # stems = ['Qx-Tt-SCI0608-N1-060814-123433']
-        stems = ['Qx-Tt-SCI0608-N1-060814-121518']
+        # stems = ['Qx-Tt-SCI0608-N1-060814-121518']
         # stems = ['Qx-Tt-SCI0608-N1-060814-123433', 'Qx-Tt-SCI0608-N1-060814-121518']
         # stems = stems[:2]
 
@@ -379,7 +379,7 @@ class WhistleMetric2(BaseMetric):
                                         merged_whistle[:, 0] += current_frame 
                                         
                                         # Convert to time-frequency coordinates
-                                        merged_whistle_pix = merged_whistle.copy().astype(np.float32)
+                                        merged_whistle_pix = merged_whistle.copy().astype(int)
                                         # merged_whistle_pix[:, 0] =   (merged_whistle_pix[:, 0]-0.5) * 0.002 # Convert to milliseconds
                                         # merged_whistle_pix[:, 1] = (freq_height - 1 - merged_whistle_pix[:, 1] - 0.5) * 125  # Convert to frequency
                                         
@@ -398,7 +398,7 @@ class WhistleMetric2(BaseMetric):
                         continue
                     
                     # Convert to time-frequency coordinates
-                    whistle_pix = whistle.copy().astype(np.float32)
+                    whistle_pix = whistle.copy().astype(int)
                     whistle_pix[:, 0] = frame + whistle_pix[:, 0]  # Add frame start
                     
                     # Add to the complete list
@@ -446,8 +446,7 @@ class WhistleMetric2(BaseMetric):
             for i in range(0, H, block_size):
                 spect_snr[i:i+block_size] = snr_spect(spect_power_db[i:i+block_size], click_thr_db=10, broadband_thr_n=broadband*H )
             spect_snr = np.flipud(spect_snr) # flip frequency axis, low freq at the bottom
-            tonals_snr = [spect_snr[w[:, 1].astype(int),w[:, 0].astype(int)] for w in dt_whistles]
-
+            tonals_snr = [spect_snr[w[:, 1].astype(int),w[:, 0].astype(int).clip(0, W-1)] for w in dt_whistles]
             dt_whistles_tf = [pix_to_tf(whistle, height=freq_height) for whistle in dt_whistles]
             tonal_save(stem, dt_whistles_tf, tonals_snr, model_name='mask2former')
 
@@ -479,7 +478,7 @@ class WhistleMetric2(BaseMetric):
         rprint(f'gathered {sum_gts} gt whistles, {sum_dts} dt whistles within')
         eval_results = OrderedDict()
 
-        res = accumulate_wistle_results(img_to_whistles, debug=True, valid_gt=True, valid_len = 75, deviation_tolerence= 350/125, )
+        res = accumulate_wistle_results(img_to_whistles, debug=False, valid_gt=True, valid_len = 75, deviation_tolerence= 350/125, )
         summary = summarize_whistle_results(res)
         rprint(summary)
 
@@ -1140,8 +1139,8 @@ def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, vali
         tonals_snr = [spect_snr[dts[idx][:, 1].astype(int),dts[idx][:, 0].astype(int)]  for idx in dt_false_pos_all]
         tonal_save(img_id, dt_false_pos_tf_all, tonals_snr, 'mask2former_r50_fp')
         dt_snrs = [np.mean(snr) for snr in tonals_snr]
-        rprint({i+1: dt_snrs[i].item() for i in range(len(dt_snrs))})
-        rprint(f'stem: {img_id}, min_snr: {np.min(dt_snrs)}, max_snr: {np.max(dt_snrs)}, mean:{np.mean(dt_snrs)}, above 9: {np.sum(np.array(dt_snrs) > 9)}')
+        # rprint({i+1: dt_snrs[i].item() for i in range(len(dt_snrs))})
+        rprint(f'stem: {img_id}, min_snr: {np.min(dt_snrs)}, max_snr: {np.max(dt_snrs):.2f}, mean:{np.mean(dt_snrs):.2f}, above 9dB: {np.sum(np.array(dt_snrs) > 9)}')
         pass
                 
     res = {
@@ -1175,7 +1174,7 @@ def accumulate_wistle_results(img_to_whistles, valid_gt, valid_len=75,deviation_
         'all_dura': []
     }
     for img_id, whistles in img_to_whistles.items():
-        res = compare_whistles(**whistles, valid_gt = valid_gt, valid_len = valid_len, deviation_tolerence = deviation_tolerence,   debug=debug)
+        res = compare_whistles(**whistles, valid_gt = valid_gt, valid_len = valid_len, deviation_tolerence = deviation_tolerence, debug=debug)
         rprint(f'img_id: {img_id}')
         rprint(summarize_whistle_results(res))
         accumulated_res['dt_false_pos_all'] += res['dt_false_pos_all']
