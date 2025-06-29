@@ -285,9 +285,10 @@ class WhistleMetric2(BaseMetric):
         # DEBUG: 
         # stems = ['palmyra092007FS192-070924-205305']
         # stems = ['Qx-Tt-SCI0608-N1-060814-123433']
-        stems = ['Qx-Tt-SCI0608-N1-060814-121518']
-        # stems = ['Qx-Tt-SCI0608-N1-060814-123433', 'Qx-Tt-SCI0608-N1-060814-121518']
-        # stems = stems[:2]
+        # stems = ['Qx-Tt-SCI0608-N1-060814-121518']
+        # stems = ['Qx-Tt-SCI0608-Ziph-060819-074737']
+        # stems = ['Qx-Dd-SCI0608-Ziph-060817-100219']
+        # stems = ['Qx-Dc-SC03-TAT09-060516-171606']
 
         # add img_id in same audio file
         audio_to_img = defaultdict(dict)
@@ -479,7 +480,7 @@ class WhistleMetric2(BaseMetric):
         rprint(f'gathered {sum_gts} gt whistles, {sum_dts} dt whistles within')
         eval_results = OrderedDict()
 
-        res = accumulate_wistle_results(img_to_whistles, debug=True, valid_gt=True, valid_len = 75, deviation_tolerence= 350/125, )
+        res = accumulate_wistle_results(img_to_whistles, debug=False, valid_gt=True, valid_len = 75, deviation_tolerence= 350/125, )
         summary = summarize_whistle_results(res)
         rprint(summary)
 
@@ -1140,8 +1141,9 @@ def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, vali
         tonals_snr = [spect_snr[dts[idx][:, 1].astype(int),dts[idx][:, 0].astype(int)]  for idx in dt_false_pos_all]
         tonal_save(img_id, dt_false_pos_tf_all, tonals_snr, 'mask2former_r50_fp')
         dt_snrs = [np.mean(snr) for snr in tonals_snr]
-        rprint({i+1: dt_snrs[i].item() for i in range(len(dt_snrs))})
-        rprint(f'stem: {img_id}, min_snr: {np.min(dt_snrs)}, max_snr: {np.max(dt_snrs)}, mean:{np.mean(dt_snrs)}, above 9: {np.sum(np.array(dt_snrs) > 9)}')
+        if len(dt_snrs) > 0:
+            rprint({i+1: dt_snrs[i].item() for i in range(len(dt_snrs))})
+            rprint(f'stem: {img_id}, min_snr: {np.min(dt_snrs)}, max_snr: {np.max(dt_snrs)}, mean:{np.mean(dt_snrs)}, above 9: {np.sum(np.array(dt_snrs) > 9)}')
         pass
                 
     res = {

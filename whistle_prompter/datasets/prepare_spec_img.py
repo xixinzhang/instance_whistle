@@ -211,7 +211,7 @@ if __name__ == "__main__":
 
     # filenames = filenames[:2]
     # filenames = 'data/cross/audio/Qx-Tt-SCI0608-N1-060814-123433.wav'
-    filenames = 'data/cross/audio/Qx-Tt-SCI0608-N1-060814-121518.wav'
+    filenames = 'data/cross/audio/Qx-Dc-SC03-TAT09-060516-171606.wav'
     # with open("data/meta.json") as f:
     #     meta = json.load(f)
     # filenames = [f'data/audio/{f}.wav' for f in meta['data']["test"]]
