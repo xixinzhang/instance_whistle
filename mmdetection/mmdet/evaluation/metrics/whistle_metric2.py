@@ -32,6 +32,7 @@ from ..functional import eval_recalls
 import pycocotools.mask as maskUtils
 from rich import print as rprint
 from whistle_prompter import utils
+from whistle_prompter.utils.write_bin import writeTimeFrequencyBinary, writeContoursBinary
 import os
 
 @METRICS.register_module()
@@ -286,6 +287,7 @@ class WhistleMetric2(BaseMetric):
         # stems = ['palmyra092007FS192-070924-205305']
         # stems = ['Qx-Tt-SCI0608-N1-060814-123433']
         # stems = ['Qx-Tt-SCI0608-N1-060814-121518']
+        # stems = ['Qx-Dc-SC03-TAT09-060516-173000']
         # stems = ['Qx-Tt-SCI0608-Ziph-060819-074737']
         # stems = ['Qx-Dd-SCI0608-Ziph-060817-100219']
         # stems = ['Qx-Dc-SC03-TAT09-060516-171606']
@@ -460,8 +462,10 @@ class WhistleMetric2(BaseMetric):
                 unique_traj = np.column_stack((unique_x, averaged_y))
                 return unique_traj
             
-            binfile = os.path.join('../data/cross/anno', f'{stem}.bin')
-            gt_tonals = utils.load_annotation(binfile)
+            binfile = os.path.join('../data/cross/anno_refined', f'{stem}.bin')
+            # gt_tonals = utils.load_annotation(binfile)
+            gt_tonals = utils.load_tonal_reader(binfile)
+
             gt_tonals_pix = []
             for i, gt_traj in enumerate(gt_tonals):
                 traj_pix = utils.tf_to_pix(gt_traj, width=np.inf)
@@ -578,7 +582,6 @@ def tonal_save(stem, tonals, tonals_snr=None, model_name = 'mask2former'):
     """
     # convert to dataclass
     filename = f'outputs/{stem}_{model_name}_dt.bin'
-    from whistle_prompter.utils.write_bin import writeTimeFrequencyBinary, writeContoursBinary
     if tonals_snr is None:
         tonals_ = [contour(time=tonal[:, 0], freq=tonal[:, 1]) for tonal in tonals]
         writeTimeFrequencyBinary(filename, tonals_)

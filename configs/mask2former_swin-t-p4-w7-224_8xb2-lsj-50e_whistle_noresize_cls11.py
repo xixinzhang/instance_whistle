@@ -356,7 +356,7 @@ test_dataloader = dict(
         ann_file='labels.json',
         backend_args=None,
         data_prefix=dict(img='data/'),
-        data_root = data_root+ '/test',
+        data_root = data_root+ '/test_refined',
         pipeline=[
             dict(backend_args=None, to_float32=True, type='LoadImageFromFile'),
             dict(type='LoadAnnotations', with_bbox=True, with_mask=True),
@@ -377,7 +377,7 @@ test_dataloader = dict(
     persistent_workers=True,
     sampler=dict(shuffle=False, type='DefaultSampler'))
 test_evaluator = dict(
-    ann_file=data_root + '/test/labels.json',
+    ann_file=data_root + '/test_refined/labels.json',
     backend_args=None,
     format_only=False,
     metric=[

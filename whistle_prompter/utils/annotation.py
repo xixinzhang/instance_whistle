@@ -1,3 +1,4 @@
+import os
 import struct
 from pathlib import Path
 from typing import List
@@ -8,7 +9,7 @@ from shapely.ops import clip_by_rect
 
 from .audio import (FRAME_PER_SECOND, FREQ_BIN_RESOLUTION, HOP_MS, N_FRAMES,
                     NUM_FREQ_BINS)
-
+from .read_bin import tonalReader
 
 def load_annotation(bin_file: Path) -> list[np.ndarray]:
     """Read the bin file and obtain annotations of each contour
@@ -47,6 +48,25 @@ def load_annotation(bin_file: Path) -> list[np.ndarray]:
         print(f"Loaded {len(annos)} annotated whistles from {bin_file.stem}.bin")
     return annos  # [(time(s), frequency(Hz)),...]
 
+def load_tonal_reader(bin_file: Path)-> list[np.ndarray]:
+    """Load tonal annotations from a .ann file using the tonalReader class.
+
+    Args:
+        bin_file: Path to the .ann file
+
+    Returns:
+        List of tonal annotations
+    """
+    reader = tonalReader(bin_file)
+    contours = reader.getTimeFrequencyContours()
+    annos = []
+    num_dim=2
+    for i, data in enumerate(contours):
+        data = np.array(data).reshape(-1, num_dim)
+        data = get_dense_annotation(data)  # make the contour continuous
+        annos.append(data)
+    print(f"Loaded {len(contours)} annotated whistles from {os.path.basename(bin_file)}")
+    return annos  # [(time(s), frequency(Hz)),...]
 
 def get_dense_annotation(traj: np.ndarray, dense_factor: int = 10):
     """Get dense annotation from the trajectory to make it continuous and fill the gaps.
