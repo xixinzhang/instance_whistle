@@ -291,6 +291,7 @@ class WhistleMetric2(BaseMetric):
         # stems = ['Qx-Tt-SCI0608-Ziph-060819-074737']
         # stems = ['Qx-Dd-SCI0608-Ziph-060817-100219']
         # stems = ['Qx-Dc-SC03-TAT09-060516-171606']
+        # stems = ['QX-Dd-CC0604-TAT07-060406-002600']
 
         # add img_id in same audio file
         audio_to_img = defaultdict(dict)

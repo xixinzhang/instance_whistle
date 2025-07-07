@@ -10,6 +10,7 @@ import pycocotools.mask as maskUtils
 
 import cv2
 import numpy as np
+import torch
 from tqdm import tqdm
 
 from whistle_prompter import utils
@@ -42,7 +43,11 @@ def audios_to_segments_dict(
         spec = utils.spectrogram(waveform)
         stem = f.split("/")[-1].split(".")[0]
         dirname = f.split("/")[-2]
-        normalized_spec = utils.normalize_spec_img(spec)
+
+        spec -= torch.median(spec, dim=1, keepdim=True)[0]
+        normalized_spec = (spec - spec.min())/ (spec.max() - spec.min())
+        # normalized_spec = utils.normalize_spec_img(spec)
+        
         segments_dict.update(
             {f"{dirname}/{stem}": utils.cut_sepc(normalized_spec, overlap=overlap)}
         )  # {stem: {start_frame: segment}}
@@ -228,17 +233,19 @@ if __name__ == "__main__":
 
         meta = yaml.safe_load(f)
     test_filenames = []
+    train_filenames = []
     for stem in meta["test"]:
         test_filenames.append(f"data/cross/audio/{stem}.wav")
-
+    for stem in meta["train"]:
+        train_filenames.append(f"data/cross/audio/{stem}.wav")
     # filenames = filenames[:2]
     # filenames = 'data/cross/audio/Qx-Tt-SCI0608-N1-060814-123433.wav'
     # filenames = ['data/cross/audio/Qx-Tt-SCI0608-N1-060814-121518.wav']
-    filenames = ['data/cross/audio/QX-Dd-CC0604-TAT07-060406-002600.wav']
+    # filenames = ['data/cross/audio/QX-Dd-CC0604-TAT07-060406-002600.wav']
     # with open("data/meta.json") as f:
     #     meta = json.load(f)
     # filenames = [f'data/audio/{f}.wav' for f in meta['data']["test"]]
-    # filenames = test_filenames
+    filenames = test_filenames
 
     segments_dict = audios_to_segments_dict(filenames)
     print(segments_dict.keys())
