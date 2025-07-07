@@ -284,6 +284,7 @@ class WhistleMetric2(BaseMetric):
         stems = stems['test']
 
         # DEBUG: 
+        # stems = stems['train']
         # stems = ['palmyra092007FS192-070924-205305']
         # stems = ['Qx-Tt-SCI0608-N1-060814-123433']
         # stems = ['Qx-Tt-SCI0608-N1-060814-121518']
@@ -484,7 +485,7 @@ class WhistleMetric2(BaseMetric):
         rprint(f'gathered {sum_gts} gt whistles, {sum_dts} dt whistles within')
         eval_results = OrderedDict()
 
-        res = accumulate_wistle_results(img_to_whistles, debug=False, valid_gt=True, valid_len = 75, deviation_tolerence= 350/125, )
+        res = accumulate_wistle_results(img_to_whistles, debug=True, valid_gt=True, valid_len = 75, deviation_tolerence= 350/125, )
         summary = summarize_whistle_results(res)
         rprint(summary)
 
@@ -1142,10 +1143,15 @@ def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, vali
             spect_snr[i:i+block_size] = snr_spect(spect_power_db[i:i+block_size], click_thr_db=10, broadband_thr_n=broadband*H )
         spect_snr = np.flipud(spect_snr) # flip frequency axis, low freq at the bottom
         tonals_snr = [spect_snr[dts[idx][:, 1].astype(int),dts[idx][:, 0].astype(int)]  for idx in dt_false_pos_all]
-        tonal_save(img_id, dt_false_pos_tf_all, tonals_snr, 'mask2former_r50_fp')
+        tonal_save(img_id, dt_false_pos_tf_all, tonals_snr, 'mask2former_swin_fp')
         dt_snrs = [np.mean(snr) for snr in tonals_snr]
+
+
+        dt_false_neg_tf = [pix_to_tf(gts[idx], height=freq_height) for idx in gt_missed_all]
+        tonal_save(img_id, dt_false_neg_tf, model_name='mask2former_swin_fn')
+
         if len(dt_snrs) > 0:
-            rprint({i+1: dt_snrs[i].item() for i in range(len(dt_snrs))})
+            # rprint({i+1: dt_snrs[i].item() for i in range(len(dt_snrs))})
             rprint(f'stem: {img_id}, min_snr: {np.min(dt_snrs)}, max_snr: {np.max(dt_snrs)}, mean:{np.mean(dt_snrs)}, above 9: {np.sum(np.array(dt_snrs) > 9)}')
         pass
                 

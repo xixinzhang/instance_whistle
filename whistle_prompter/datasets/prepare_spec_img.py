@@ -1,3 +1,4 @@
+from copy import deepcopy
 import glob
 import json
 import os
@@ -238,6 +239,8 @@ if __name__ == "__main__":
         test_filenames.append(f"data/cross/audio/{stem}.wav")
     for stem in meta["train"]:
         train_filenames.append(f"data/cross/audio/{stem}.wav")
+    for stem in meta["train"]:
+        train_filenames.append(f"data/cross/audio/{stem}.wav")
     # filenames = filenames[:2]
     # filenames = 'data/cross/audio/Qx-Tt-SCI0608-N1-060814-123433.wav'
     # filenames = ['data/cross/audio/Qx-Tt-SCI0608-N1-060814-121518.wav']
@@ -245,17 +248,13 @@ if __name__ == "__main__":
     # with open("data/meta.json") as f:
     #     meta = json.load(f)
     # filenames = [f'data/audio/{f}.wav' for f in meta['data']["test"]]
-    filenames = test_filenames
+    filenames = deepcopy(train_filenames)
 
     segments_dict = audios_to_segments_dict(filenames)
     print(segments_dict.keys())
-    save_specs_img(
-        segments_dict,
-        args.raw_spec,
-        filter_empty_gt=False,  # train/test
-        cmap=args.cmap,
-        line_width=args.line_width,
-        anno = 'anno_refined',
-    )
-    # random split dataset
+    if filenames[0] in test_filenames:
+        save_specs_img(segments_dict, args.raw_spec, filter_empty_gt=False, cmap=args.cmap, line_width=args.line_width)
+    else:
+        save_specs_img(segments_dict, args.raw_spec, filter_empty_gt=True, cmap=args.cmap, line_width=args.line_width)
+    # random split dataset 
     # split_specs_dataset(f"{args.raw_spec}/labels.json", f'{args.raw_spec}/data', args.output_dir)
