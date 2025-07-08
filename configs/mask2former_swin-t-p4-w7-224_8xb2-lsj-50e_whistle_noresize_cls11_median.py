@@ -378,7 +378,7 @@ train_cfg = dict(
     ],
     max_iters=368750,
     type='IterBasedTrainLoop',
-    val_interval=50)
+    val_interval=5000)
 train_dataloader = dict(
     batch_sampler=dict(type='AspectRatioBatchSampler'),
     batch_size=2,
