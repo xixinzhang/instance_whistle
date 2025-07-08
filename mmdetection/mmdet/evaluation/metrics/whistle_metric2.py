@@ -284,15 +284,8 @@ class WhistleMetric2(BaseMetric):
         stems = stems['test']
 
         # DEBUG: 
-        # stems = stems['train']
-        # stems = ['palmyra092007FS192-070924-205305']
-        # stems = ['Qx-Tt-SCI0608-N1-060814-123433']
-        # stems = ['Qx-Tt-SCI0608-N1-060814-121518']
-        # stems = ['Qx-Dc-SC03-TAT09-060516-173000']
-        # stems = ['Qx-Tt-SCI0608-Ziph-060819-074737']
-        # stems = ['Qx-Dd-SCI0608-Ziph-060817-100219']
-        # stems = ['Qx-Dc-SC03-TAT09-060516-171606']
-        # stems = ['QX-Dd-CC0604-TAT07-060406-002600']
+        stems = ['Qx-Tt-SCI0608-N1-060814-121518']
+
 
         # add img_id in same audio file
         audio_to_img = defaultdict(dict)
@@ -329,7 +322,8 @@ class WhistleMetric2(BaseMetric):
             dt_whistles = []  # Will contain both merged and non-merged whistles
             frame_width = 1500  # 1500 pixels = 300ms (since 1 pixel = 0.2ms)
             freq_height = 769  # 769 pixels = 125Hz (since 1 pixel = 125Hz)
-            top_cutoff = 368
+            top_cutoff = 368  # (96000-50000)/125
+            bottom_cutoff = 729 # 769 - 5000/125
 
             sorted_frames = sorted(coco_whistles.keys())
             # Track whistles that have already been merged to avoid re-merging
@@ -416,8 +410,8 @@ class WhistleMetric2(BaseMetric):
             filtered_dt_whistles = []
             for whistle in dt_whistles:
                 # Find points that are below the top_cutoff (points below top_cutoff are valid)
-                valid_indices = whistle[:, 1] > top_cutoff
-                
+                valid_indices = (whistle[:, 1] > top_cutoff) & (whistle[:, 1] < bottom_cutoff)
+
                 # If no valid points, skip this whistle entirely
                 if not np.any(valid_indices):
                     continue
@@ -465,7 +459,6 @@ class WhistleMetric2(BaseMetric):
                 return unique_traj
             
             binfile = os.path.join('../data/cross/anno_refined', f'{stem}.bin')
-            # gt_tonals = utils.load_annotation(binfile)
             gt_tonals = utils.load_tonal_reader(binfile)
 
             gt_tonals_pix = []
@@ -480,12 +473,13 @@ class WhistleMetric2(BaseMetric):
                 'w': torch.inf,
                 'img_id': stem,
             }
+        # import pdb; pdb.set_trace()
         sum_gts = sum([len(whistles['gts']) for whistles in img_to_whistles.values()])
         sum_dts = sum([len(whistles['dts']) for whistles in img_to_whistles.values()])
         rprint(f'gathered {sum_gts} gt whistles, {sum_dts} dt whistles within')
         eval_results = OrderedDict()
 
-        res = accumulate_wistle_results(img_to_whistles, debug=True, valid_gt=True, valid_len = 75, deviation_tolerence= 350/125, )
+        res = accumulate_wistle_results(img_to_whistles, debug=True, valid_gt=True, valid_len = 75, deviation_tolerence= 350/125)
         summary = summarize_whistle_results(res)
         rprint(summary)
 
@@ -1120,9 +1114,9 @@ def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, vali
 
         if matched:
             gt_deviation = np.mean(deviations)
-            all_deviation.append(gt_deviation) 
+            all_deviation.append(gt_deviation)
             all_covered.append(covered)
-            all_dura.append(gt_dura)
+        all_dura.append(gt_dura) # move out from matched
 
     if debug:
         # if dt_false_pos_all:
@@ -1145,7 +1139,6 @@ def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, vali
         tonals_snr = [spect_snr[dts[idx][:, 1].astype(int),dts[idx][:, 0].astype(int)]  for idx in dt_false_pos_all]
         tonal_save(img_id, dt_false_pos_tf_all, tonals_snr, 'mask2former_swin_fp')
         dt_snrs = [np.mean(snr) for snr in tonals_snr]
-
 
         dt_false_neg_tf = [pix_to_tf(gts[idx], height=freq_height) for idx in gt_missed_all]
         tonal_save(img_id, dt_false_neg_tf, model_name='mask2former_swin_fn')
