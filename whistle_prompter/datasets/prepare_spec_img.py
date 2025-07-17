@@ -248,6 +248,7 @@ if __name__ == "__main__":
     #     meta = json.load(f)
     # filenames = [f'data/audio/{f}.wav' for f in meta['data']["test"]]
     # filenames = deepcopy(train_filenames)
+    # filenames = deepcopy(test_filenames)
 
     segments_dict = audios_to_segments_dict(filenames)
     print(segments_dict.keys())

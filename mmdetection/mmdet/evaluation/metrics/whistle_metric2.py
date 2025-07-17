@@ -2,16 +2,18 @@
 from dataclasses import dataclass
 import datetime
 import itertools
+import cv2
 import  yaml
 import json
 import os.path as osp
 import tempfile
 from collections import OrderedDict, defaultdict, deque
 from time import time
-from typing import Dict, List, Optional, Sequence, Union
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 from rich import print as rprint
 from skimage.morphology import skeletonize
 from copy import deepcopy
+from scipy.spatial.distance import cdist
 
 import numpy as np
 from scipy.signal import medfilt2d
@@ -211,17 +213,6 @@ class WhistleMetric2(BaseMetric):
                         results_dict[image_id][w_id] = w
                         w_id += 1
 
-
-        # TODO: dump whistles
-
-        # result_files['bbox'] = f'{outfile_prefix}.bbox.json'
-        # result_files['proposal'] = f'{outfile_prefix}.bbox.json'
-        # dump(bbox_json_results, result_files['bbox'])
-
-        # if segm_json_results is not None:
-        #     result_files['segm'] = f'{outfile_prefix}.segm.json'
-        #     dump(segm_json_results, result_files['segm'])
-
         return results_dict
 
     # TODO: data_batch is no longer needed, consider adjusting the
@@ -284,6 +275,7 @@ class WhistleMetric2(BaseMetric):
         stems = stems['test']
 
         # DEBUG: 
+        # stems = stems['train']
         stems = ['Qx-Tt-SCI0608-N1-060814-121518']
 
 
@@ -324,6 +316,7 @@ class WhistleMetric2(BaseMetric):
             freq_height = 769  # 769 pixels = 125Hz (since 1 pixel = 125Hz)
             top_cutoff = 368  # (96000-50000)/125
             bottom_cutoff = 729 # 769 - 5000/125
+            length_thre = 6
 
             sorted_frames = sorted(coco_whistles.keys())
             # Track whistles that have already been merged to avoid re-merging
@@ -423,17 +416,20 @@ class WhistleMetric2(BaseMetric):
                     if is_valid:
                         current_segment.append(point)
                     elif current_segment:  # End of a valid segment
-                        if len(current_segment) > 10:  # remove too short segments
+                        if len(current_segment) > length_thre:  # remove too short segments
                             segments.append(np.array(current_segment))
                         current_segment = []
-                
+                               
                 # Don't forget the last segment if it exists
-                if current_segment and len(current_segment) > 10:
-                    segments.append(np.array(current_segment))
+                if current_segment and len(current_segment) > length_thre:
+                        segments.append(np.array(current_segment))
                 
                 # Add all valid segments to our filtered list
                 filtered_dt_whistles.extend(segments)
             dt_whistles = filtered_dt_whistles
+
+            # apply NMS to remove overlapping whistles
+            dt_whistles = whistle_nms(dt_whistles)
 
             # save the whistles to binary file
             waveform, sample_rate = load_wave_file(f'../data/cross/audio/{stem}.wav')
@@ -484,6 +480,129 @@ class WhistleMetric2(BaseMetric):
         rprint(summary)
 
         return eval_results
+
+def whistle_nms(dt_whistles: List[np.ndarray], 
+                         freq_deviation_threshold: float = 2,
+                         overlap_threshold: float = 0.7) -> List[int]:
+    """
+    Ultra-fast NMS using frequency deviation over overlapped time ranges.
+    Much more efficient than point-by-point matching.
+    
+    Args:
+        dt_whistles: List of nx2 arrays (time, freq) coordinates (sorted by time)
+        freq_deviation_threshold: Max mean frequency deviation for overlapped regions
+        overlap_threshold: Minimum time overlap ratio to consider suppression
+    
+    Returns:
+        List of indices of whistles to keep
+    """
+    if len(dt_whistles) == 0:
+        return []
+    
+    # Pre-process: ensure time-sorted and extract time ranges
+    processed_whistles = []
+    lengths = []
+    suppressed = set()
+
+    for idx, whistle in enumerate(dt_whistles):
+        if len(whistle) == 0:
+            processed_whistles.append(None)
+            lengths.append(0)
+            continue
+
+        # Sort by time if needed
+        if len(whistle) > 1 and not np.all(whistle[:-1, 0] <= whistle[1:, 0]):
+            whistle = whistle[np.argsort(whistle[:, 0])]
+        
+        time_range = (whistle[0, 0], whistle[-1, 0])
+        processed_whistles.append({
+            'data': whistle,
+            'time_range': time_range
+        })
+        lengths.append(len(whistle))
+    sorted_indices = np.argsort(lengths)[::-1]
+
+    keep = []
+    
+    for i in sorted_indices:
+        if i in suppressed:
+            continue
+            
+        keep.append(i)
+        current_whistle = processed_whistles[i]
+        
+        if current_whistle is None:
+            continue
+        
+        # Check candidates for suppression using deviation method
+        for j in sorted_indices:
+            if j <= i or j in suppressed:
+                continue
+                
+            candidate_whistle = processed_whistles[j]
+            if candidate_whistle is None:
+                continue
+            
+            # Check if they should be merged based on overlapped region deviation
+            if should_suppress_by_deviation(current_whistle, candidate_whistle, 
+                                          freq_deviation_threshold, overlap_threshold):
+                suppressed.add(j)
+
+    return [dt_whistles[i] for i in keep]
+
+
+def should_suppress_by_deviation(longer_whistle: dict, shorter_whistle: dict,
+                               freq_deviation_threshold: float, overlap_threshold: float) -> bool:
+    """
+    Check if shorter whistle should be suppressed based on frequency deviation in overlap region.
+    """
+    # Find overlapped time range
+    overlap_start = max(longer_whistle['time_range'][0], shorter_whistle['time_range'][0])
+    overlap_end = min(longer_whistle['time_range'][1], shorter_whistle['time_range'][1])
+    
+    # No overlap
+    if overlap_start >= overlap_end:
+        return False
+    
+    # Check if overlap is significant enough
+    shorter_duration = shorter_whistle['time_range'][1] - shorter_whistle['time_range'][0]
+    if shorter_duration <= 0:
+        return False
+    
+    overlap_duration = overlap_end - overlap_start
+    overlap_ratio = overlap_duration / shorter_duration
+    
+    # Insufficient overlap
+    if overlap_ratio < overlap_threshold:
+        return False
+    
+    # Extract overlapped segments and compute deviation
+    longer_overlap = extract_time_segment(longer_whistle['data'], overlap_start, overlap_end)
+    shorter_overlap = extract_time_segment(shorter_whistle['data'], overlap_start, overlap_end)
+    
+    if longer_overlap is None or shorter_overlap is None:
+        return False
+    
+    # Calculate frequency deviation between overlapped segments
+    deviation = np.mean(np.abs(longer_overlap - shorter_overlap))
+
+    return deviation <= freq_deviation_threshold
+
+
+def extract_time_segment(whistle_data: np.ndarray, start_time: float, end_time: float) -> Optional[np.ndarray]:
+    """
+    Extract whistle segment within time range.
+    """
+    if len(whistle_data) == 0:
+        return None
+    
+    # Find points within time range
+    mask = (whistle_data[:, 0] >= start_time) & (whistle_data[:, 0] <= end_time)
+    segment = whistle_data[mask]
+    
+    return segment if len(segment) > 0 else None
+
+
 
 def wave_to_spect(
         waveform, 
@@ -554,7 +673,7 @@ def snr_spect(spect_db, click_thr_db, broadband_thr_n):
 
 
 
-def pix_to_tf(pix, height):
+def pix_to_tf(pix, height = 769):
     """Convert pixel coordinates to time-frequency coordinates."""
     time = (pix[:, 0]-0.5) * 0.002  # Convert to seconds
     freq = (height - 1 - pix[:, 1] + 0.5) * 125  # Convert to frequency in Hz
@@ -1222,6 +1341,7 @@ def summarize_whistle_results(accumulated_res):
         'dt_all': dt_tp + dt_fp,
         'precision': precision,
         'recall': recall,
+        'f1': 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0,
         'frag': frag,
         'coverage': coverage,
         'gt_n':(gt_tp_valid + gt_fn_valid),
@@ -1229,5 +1349,6 @@ def summarize_whistle_results(accumulated_res):
         'precision_valid': precision_valid,
         'recall_valid': recall_valid,
         'frag_valid': frag_valid,
+        'f1_valid': 2 * precision_valid * recall_valid / (precision_valid + recall_valid) if (precision_valid + recall_valid) > 0 else 0
     }
     return summary
