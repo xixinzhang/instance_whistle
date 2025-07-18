@@ -29,7 +29,6 @@ from mmdet.datasets.api_wrappers import COCO, COCOeval, COCOevalMP
 from mmdet.registry import METRICS
 from mmdet.structures.mask import encode_mask_results
 from tqdm import tqdm
-from ..functional import eval_recalls
 
 import pycocotools.mask as maskUtils
 from rich import print as rprint
@@ -417,12 +416,16 @@ class WhistleMetric2(BaseMetric):
                         current_segment.append(point)
                     elif current_segment:  # End of a valid segment
                         if len(current_segment) > length_thre:  # remove too short segments
-                            segments.append(np.array(current_segment))
+                            duration = current_segment[-1][0] - current_segment[0][0]
+                            if duration > 5: 
+                                segments.append(np.array(current_segment))
                         current_segment = []
                                
-                # Don't forget the last segment if it exists
+                # the last segment if it exists
                 if current_segment and len(current_segment) > length_thre:
-                        segments.append(np.array(current_segment))
+                        duration = current_segment[-1][0] - current_segment[0][0]
+                        if duration > 5: 
+                            segments.append(np.array(current_segment))
                 
                 # Add all valid segments to our filtered list
                 filtered_dt_whistles.extend(segments)
@@ -585,6 +588,7 @@ def should_suppress_by_deviation(longer_whistle: dict, shorter_whistle: dict,
     
     # Calculate frequency deviation between overlapped segments
     deviation = np.mean(np.abs(longer_overlap - shorter_overlap))
+
 
     return deviation <= freq_deviation_threshold
 
@@ -758,216 +762,8 @@ def bresenham_line(p1, p2):
     
     return path
 
-
-def midpoint_interpolation(p1, p2):
-    """
-    Recursively creates a path by adding midpoints between points.
-    
-    Args:
-        p1: Starting point (x1, y1)
-        p2: Ending point (x2, y2)
-        
-    Returns:
-        List of points forming a continuous path
-    """
-    x1, y1 = p1
-    x2, y2 = p2
-    
-    # Base case: points are adjacent or the same
-    if abs(x2 - x1) <= 1 and abs(y2 - y1) <= 1:
-        return [p1, p2]
-    
-    # Find the midpoint (rounded to integers)
-    mid_x = (x1 + x2) // 2
-    mid_y = (y1 + y2) // 2
-    midpoint = (mid_x, mid_y)
-    
-    # Recursively find paths for each half
-    first_half = midpoint_interpolation(p1, midpoint)
-    second_half = midpoint_interpolation(midpoint, p2)
-    
-    # Combine the paths (avoid duplicating the midpoint)
-    return first_half[:-1] + second_half
-
-
-def simple_weighted_path(points, i, window=2):
-    """
-    A simpler weighted path method that doesn't use BFS.
-    Uses direct interpolation with local direction awareness.
-    
-    Args:
-        points: All trajectory points
-        i: Current index
-        window: Number of points to consider on each side
-        
-    Returns:
-        List of points forming a continuous path
-    """
-    # Ensure all points are tuples
-    points = [tuple(p) for p in points]
-    current = points[i]
-    next_point = points[i + 1]
-    
-    # If points are close, use Bresenham's algorithm
-    if abs(next_point[0] - current[0]) <= 3 and abs(next_point[1] - current[1]) <= 3:
-        return bresenham_line(current, next_point)
-    
-    # Get neighboring points within window
-    start_idx = max(0, i - window)
-    end_idx = min(len(points) - 1, i + 1 + window)
-    neighbors = points[start_idx:end_idx + 1]
-    
-    # Simple weighted path based on direction awareness
-    if len(neighbors) <= 2:
-        return bresenham_line(current, next_point)
-    
-    # Calculate primary direction from neighbors
-    x_coords = [p[0] for p in neighbors]
-    y_coords = [p[1] for p in neighbors]
-    
-    # Simple linear trend (direction)
-    if len(neighbors) >= 3:
-        x_diffs = [x_coords[j+1] - x_coords[j] for j in range(len(x_coords)-1)]
-        y_diffs = [y_coords[j+1] - y_coords[j] for j in range(len(y_coords)-1)]
-        avg_x_diff = sum(x_diffs) / len(x_diffs)
-        avg_y_diff = sum(y_diffs) / len(y_diffs)
-    else:
-        avg_x_diff = next_point[0] - current[0]
-        avg_y_diff = next_point[1] - current[1]
-    
-    # Create a path with awareness of the typical step size
-    path = [current]
-    
-    # Current position
-    cx, cy = current
-    tx, ty = next_point
-    
-    # Step sizes (make them integers between 1-3 based on average direction)
-    step_x = max(1, min(3, int(abs(avg_x_diff)) or 1)) * (1 if tx > cx else -1 if tx < cx else 0)
-    step_y = max(1, min(3, int(abs(avg_y_diff)) or 1)) * (1 if ty > cy else -1 if ty < cy else 0)
-    
-    # We'll adjust step_x and step_y to ensure we don't overshoot
-    while (cx, cy) != next_point:
-        # Decide which direction to move
-        if abs(cx - tx) > abs(cy - ty):
-            # Move in x direction
-            new_cx = cx + step_x
-            # Check if we'd overshoot
-            if (step_x > 0 and new_cx > tx) or (step_x < 0 and new_cx < tx):
-                new_cx = tx
-            cx = new_cx
-        else:
-            # Move in y direction
-            new_cy = cy + step_y
-            # Check if we'd overshoot
-            if (step_y > 0 and new_cy > ty) or (step_y < 0 and new_cy < ty):
-                new_cy = ty
-            cy = new_cy
-        
-        # Add new point to path
-        new_point = (cx, cy)
-        
-        # Check if we need to fill gaps (ensure path is grid-continuous)
-        last_point = path[-1]
-        if abs(new_point[0] - last_point[0]) > 1 or abs(new_point[1] - last_point[1]) > 1:
-            # Fill gap with Bresenham
-            gap_filler = bresenham_line(last_point, new_point)
-            path.extend(gap_filler[1:])
-        else:
-            path.append(new_point)
-    
-    return path
-
-
-def bezier_grid_path(points, start_idx, end_idx, steps=10):
-    """
-    Creates a Bezier curve between points and snaps it to grid.
-    
-    Args:
-        points: All trajectory points
-        start_idx: Index of starting point
-        end_idx: Index of ending point
-        steps: Number of interpolation steps
-        
-    Returns:
-        List of grid points approximating a Bezier curve
-    """
-    # Extract points
-    p0 = points[start_idx]
-    p3 = points[end_idx]
-    
-    # Use neighboring points to determine control points if available
-    if start_idx > 0 and end_idx < len(points) - 1:
-        # Control points based on neighboring points
-        prev = points[start_idx - 1]
-        next_point = points[end_idx + 1]
-        
-        # Create control points by extending the lines from neighbors
-        dx1 = p0[0] - prev[0]
-        dy1 = p0[1] - prev[1]
-        p1 = (p0[0] + dx1 // 2, p0[1] + dy1 // 2)
-        
-        dx2 = p3[0] - next_point[0]
-        dy2 = p3[1] - next_point[1]
-        p2 = (p3[0] + dx2 // 2, p3[1] + dy2 // 2)
-    else:
-        # Default control points for endpoints
-        dx = p3[0] - p0[0]
-        dy = p3[1] - p0[1]
-        p1 = (p0[0] + dx // 3, p0[1] + dy // 3)
-        p2 = (p0[0] + 2 * dx // 3, p0[1] + 2 * dy // 3)
-    
-    # Generate Bezier curve points
-    curve_points = []
-    for t in np.linspace(0, 1, steps):
-        # Cubic Bezier formula
-        x = (1-t)**3 * p0[0] + 3*(1-t)**2*t * p1[0] + 3*(1-t)*t**2 * p2[0] + t**3 * p3[0]
-        y = (1-t)**3 * p0[1] + 3*(1-t)**2*t * p1[1] + 3*(1-t)*t**2 * p2[1] + t**3 * p3[1]
-        
-        # Round to nearest grid point
-        curve_points.append((round(x), round(y)))
-    
-    # Ensure the path is continuous by filling any gaps
-    grid_path = [p0]
-    for i in range(1, len(curve_points)):
-        prev = grid_path[-1]
-        current = curve_points[i]
-        
-        # If points aren't adjacent, fill the gap with Bresenham
-        if abs(current[0] - prev[0]) > 1 or abs(current[1] - prev[1]) > 1:
-            connecting_points = bresenham_line(prev, current)
-            grid_path.extend(connecting_points[1:])
-        else:
-            grid_path.append(current)
-    
-    # Ensure end point is included
-    if grid_path[-1] != p3:
-        connecting_points = bresenham_line(grid_path[-1], p3)
-        grid_path.extend(connecting_points[1:])
-    
-    return grid_path
-
-def mask_to_whistle(mask, method='bresenham', max_gap=25, min_segment_ratio = 0.1):
-    """convert the instance mask to whistle contour, use skeleton methods
-    
-    Args
-        mask: instance mask (H, W)
-    Return
-        whistle: (N,2) in pixel coordinates
-    """
-    mask = mask.astype(np.uint8)
-    skeleton = skeletonize(mask).astype(np.uint8)
-    border_mask = np.zeros_like(mask, dtype=bool)
-    border_mask[:, [0, -1]] = True
-    border_pixels = mask & border_mask
-    skeleton = skeleton | border_pixels
-    whistle = np.array(np.nonzero(skeleton)).T # [(y, x]
-    whistle = np.flip(whistle, axis=1)  # [(x, y)]
-    whistle = np.unique(whistle, axis=0)  # remove duplicate points
-    whistle = whistle[whistle[:, 0].argsort()]
-    assert whistle.ndim ==2 and whistle.shape[1] == 2, f"whistle shape: {whistle.shape}"
-
-    # Split into segments based on point distances
+def clean_whistle_ori(whistle, max_gap=25, min_segment_ratio = 0.1):
+      # Split into segments based on point distances
     segments = []
     current_segment = [whistle[0]]
     skip_pre = False
@@ -1015,17 +811,7 @@ def mask_to_whistle(mask, method='bresenham', max_gap=25, min_segment_ratio = 0.
                 next_point = segment_points[i + 1]
                 
                 # Generate intermediate points
-                if method == 'bresenham':
-                    intermediate_points = bresenham_line(current, next_point)
-                elif method == 'midpoint':
-                    intermediate_points = midpoint_interpolation(current, next_point)
-                elif method == 'bezier':
-                    intermediate_points = bezier_grid_path(segment_points, i, i+1)
-                elif method == 'weighted':
-                    intermediate_points = simple_weighted_path(segment_points, i)
-                else:
-                    raise ValueError(f"Unknown method: {method}")
-                
+                intermediate_points = bresenham_line(current, next_point)
                 # Add intermediate points
                 processed_segment.extend(intermediate_points[1:])
             
@@ -1039,6 +825,341 @@ def mask_to_whistle(mask, method='bresenham', max_gap=25, min_segment_ratio = 0.
             unique_whistle = np.column_stack((unique_x, averaged_y))
             
             result_whistles.append(unique_whistle)
+    return result_whistles
+
+def overlay_whistle(whistles, filename, thickness=2):
+    """Overlay whistles on the image for visualization.
+    Args:
+        whistles: List of whistles, each whistle is a list of (x, y) tuples
+        filename: Path to the image file
+        thickness: Thickness of the lines to draw   
+    """
+    image = cv2.imread(filename)
+    for whistle in whistles:
+        color = np.random.randint(0, 255, size=3).tolist()
+        for i in range(len(whistle) - 1):
+            cv2.line(image, tuple(whistle[i]), tuple(whistle[i + 1]), color, thickness)
+    # save the image with overlaid whistles
+    out_filename = '/home/asher/Desktop/projects/instance_whistle/tmp.png'
+    cv2.imwrite(out_filename, image)
+
+def clean_whistle(whistle, max_gap_x=25, max_gap_y =8, recent_fit = 12):
+    """Clean the whistle by removing outliers and smoothing the trajectory.
+    Args:
+        whistle: sorted list of (x, y) tuples representing the whistle trajectory
+    """
+    unique_x = np.unique(whistle[:, 0])
+    if len(unique_x) < 2:
+        return np.array(whistle)[None, :] 
+
+    # check if all x has no neighboring multiple y values
+    peaks = OrderedDict()
+    for i, x in enumerate(unique_x):
+        # y gap
+        peaks[x] = []
+        y_values = whistle[whistle[:, 0] == x][:, 1]
+        # check if y_values are close neighbors or belong to different branches
+        if len(y_values) > 1:
+            # group neighboring y values, seperate y in different branches
+            y_values.sort()
+            y_groups = []
+            current_group = [y_values[0]]
+            dis = np.abs(np.diff(y_values))
+            for j in range(1, len(y_values)):
+                if dis[j-1] <= 2:
+                    current_group.append(y_values[j])
+                else:
+                    y_groups.append(current_group)
+                    current_group = [y_values[j]]
+            y_groups.append(current_group)
+            # take the mean of each group
+            for group in y_groups:
+                mean_y = int(np.round(np.mean(group)))
+                peaks[x].append(mean_y)
+        else:
+            peaks[x] = [y_values[0]]
+    
+    whistles = traverse_peaks(peaks, max_gap_x, max_gap_y, recent_fit)
+
+    return whistles
+
+class PolynomialRegression:
+    """
+    A class to perform polynomial regression using least squares.
+    It calculates the best-fit polynomial coefficients and evaluates the fit.
+    """
+
+    def __init__(self, x, y, degree=1):
+        """
+        Initializes the PolynomialRegression model.
+
+        Args:
+            degree (int): The initial desired degree of the polynomial.
+                          This will be adjusted based on the number of data points.
+        """
+        self.degree = degree
+        # Coefficients of the polynomial. Stored in decreasing power order (e.g., [a, b, c] for ax^2 + bx + c)
+        # to be compatible with numpy.polyval.
+        self.coefficients = None
+        self.num_observations = 0
+
+        # Evaluation metrics
+        self.ssTotal = 0.0
+        self.ssRes = 0.0
+        self.ssReg = 0.0
+        self.R2 = 0.0
+        self.R2_ADJ = 0.0
+        self.sdRes = 0.0
+
+        self.create_fit(x, y)
+        self.evaluate_fit(x, y)
+
+    def get_squared_error(self, x_val, y_actual):
+        """
+        Calculates the squared error for a given point.
+
+        Args:
+            x_val (float): The independent variable value.
+            y_actual (float): The actual dependent variable value.
+
+        Returns:
+            float: The squared error.
+        """
+        error = y_actual - self.predict(x_val) # Directly calculate error here
+        return error * error
+
+    def predict(self, x_val):
+        """
+        Predicts the y-value for a given x-value using the calculated polynomial coefficients.
+        Leverages numpy.polyval for efficient evaluation.
+
+        Args:
+            x_val (float or np.array): The independent variable value(s).
+
+        Returns:
+            float or np.array: The predicted dependent variable value(s).
+        """
+        if self.coefficients is None:
+            raise ValueError("Model not fitted yet. Call createFit() first.")
+
+        # numpy.polyval evaluates a polynomial at specific x values.
+        # It expects coefficients in decreasing power order (e.g., [a, b, c] for ax^2 + bx + c).
+        return np.polyval(self.coefficients, x_val)
+
+    def create_fit(self, x, y):
+        """
+        Calculates the polynomial coefficients for the best-fit polynomial
+        using numpy.polyfit, which is the idiomatic Python way.
+
+        Args:
+            x (np.array): Array of independent variable values.
+            y (np.array): Array of dependent variable values.
+        """
+        self.num_observations = len(x)
+
+        if self.num_observations == 1:
+            # Handle the special case where we only have one point.
+            # We create a 0-order polynomial (a constant).
+            self.coefficients = np.array([y[0]]) # Store as a single coefficient for polyval
+            self.degree = 0
+        else:
+            # Adjust the degree based on the number of observations.
+            # The degree must be less than the number of points minus 1
+            # (for fitting, usually N-1 is max degree for N points).
+            # The original Java code uses x.length - 2, which is more conservative.
+            self.degree = min(self.num_observations - 2, self.degree)
+            if self.degree < 0: # Ensure degree is not negative if num_observations is small (e.g., 1)
+                self.degree = 0
+
+            # Use np.polyfit directly for polynomial fitting.
+            # np.polyfit returns coefficients in decreasing power order, which is directly
+            # compatible with np.polyval.
+            try:
+                self.coefficients = np.polyfit(x, y, self.degree)
+            except np.linalg.LinAlgError as e:
+                print(f"Linear algebra error during polynomial fit: {e}")
+                self.coefficients = None # Indicate failure to fit
+
+    def evaluate_fit(self, x, y):
+        """
+        Evaluates the quality of the polynomial fit by calculating various
+        statistical metrics.
+
+        Args:
+            x (np.array): Array of independent variable values.
+            y (np.array): Array of dependent variable values.
+        """
+        if self.coefficients is None:
+            print("Cannot evaluate fit: Model not fitted or fit failed.")
+            return
+
+        self.num_observations = len(x) # Ensure num_observations is up-to-date
+
+        # The mean of the dependent variable
+        mean_y = np.mean(y)
+
+        # Total Sum of Squares (ssTotal)
+        # The sum of all of the squared differences of the dependent variable
+        # from the mean.
+        self.ssTotal = np.sum((y - mean_y)**2)
+
+        # Residual Sum of Squares (ssRes)
+        # Variation caused by the regression model.
+        # Sum Of Squared Errors, sum of squares of the residuals.
+        y_predicted = self.predict(x) # Use the vectorized predict method
+        self.ssRes = np.sum((y - y_predicted)**2)
+
+        # Coefficient of determination (R-squared)
+        # R2 measures how well the regression predictions approximate the real data points.
+        # R2 = 1 - (SS_res / SS_total)
+        self.R2 = 1.0 if self.ssTotal == 0 else 1 - (self.ssRes / self.ssTotal)
+
+        # Adjusted coefficient of determination (Adjusted R-squared)
+        # Adjusted R2 accounts for the number of predictors in the model.
+        # It is useful for comparing models with different numbers of predictors.
+        # Formula: 1 - (1 - R2) * (N - 1) / (N - p - 1)
+        # where N is num_observations, p is degree (number of predictors is degree + 1)
+        denominator_adj_r2 = self.num_observations - self.degree - 1
+        if denominator_adj_r2 > 0:
+            self.R2_ADJ = 1 - (1 - self.R2) * (self.num_observations - 1) / denominator_adj_r2
+        else:
+            self.R2_ADJ = float('nan') # Not well-defined if denominator is zero or negative
+
+        # Regression sum of squares (ssReg)
+        # The part of the total variation that is explained by the regression model.
+        self.ssReg = self.ssTotal - self.ssRes
+
+        # Standard deviation of residuals (sdRes)
+        # A measure of the average distance that the observed values fall from the regression line.
+        denominator_sd_res = self.num_observations - self.degree - 1
+        if denominator_sd_res > 0:
+            self.sdRes = np.sqrt(self.ssRes / denominator_sd_res)
+        else:
+            self.sdRes = float('nan') # Not well-defined if denominator is zero or negative
+
+
+def traverse_peaks(peaks: OrderedDict, max_gap_x=25, max_gap_y =8, recent_fit = 12, min_segment_ratio = 0.1):
+    # traverse the peaks and extend the whistle
+    cleaned_whistles = []
+    xs = list(peaks.keys())
+    dis = np.abs(np.diff(xs))
+    # remove the outliers at the beginning
+    start_idx = np.nonzero(dis < max_gap_x)[0][0]
+    for i, (x, ys) in enumerate(peaks.items()):
+        if i < start_idx:
+            continue
+        elif i == start_idx:
+            # start the first whistle
+            cleaned_whistles.append([(x, ys[0])])
+            continue
+        else:
+            prev_x = list(peaks.keys())[i-1]
+            if abs(x - prev_x) > max_gap_x:
+                # if the gap is too large, start a new whistle
+                cleaned_whistles.append([(x, ys[0])])
+                continue
+        for y in ys:
+            min_error = np.inf
+            best_fit = 0
+            for j, whistle in enumerate(cleaned_whistles):
+                # check if the last point of the whistle is close enough to the current point
+                if abs(whistle[-1][0] - x) > max_gap_x or abs(whistle[-1][1] - y) > max_gap_y:
+                    continue
+                # polyfit the whistle
+                if len(whistle) > recent_fit:
+                    degree = 1
+                    x_vector = np.array(whistle)[-recent_fit:, 0]
+                    y_vector = np.array(whistle)[-recent_fit:, 1]
+                    while True:
+                        poly = PolynomialRegression(x_vector, y_vector, degree=degree)
+                        if poly.R2_ADJ > 0.7 or len(x_vector) < degree*3 or poly.sdRes < 2:
+                            error= poly.get_squared_error(x, y)
+                            if error < min_error:
+                                min_error = error
+                                best_fit = j
+                            break
+                        degree += 1
+                else:
+                    for degree in range(1, 3):
+                        x_vector = np.array(whistle)[:, 0]
+                        y_vector = np.array(whistle)[:, 1]
+                        poly = PolynomialRegression(x_vector, y_vector, degree=degree)
+                        if poly.R2_ADJ > 0.7 or len(x_vector) < degree*3 or poly.sdRes < 2:
+                            error= poly.get_squared_error(x, y)
+                            if error < min_error:
+                                min_error = error
+                                best_fit = j
+                            break
+            # add the point to the best fit whistle
+            if min_error < max_gap_y**2:
+                cleaned_whistles[best_fit].append((x, y))
+            else:
+                # if no good fit is found, start a new whistle
+                cleaned_whistles.append([(x, y)])
+
+    cleaned_whistles = [np.asarray(whistle) for whistle in cleaned_whistles if len(whistle) > 1]
+    # Sort segments by their x-range length (descending)
+    cleaned_whistles.sort(key=lambda s: s[-1, 0] - s[0, 0], reverse=True)
+    
+      # Determine which segments to keep (long enough compared to main segment)
+    main_segment_length = cleaned_whistles[0][-1, 0] - cleaned_whistles[0][0, 0]
+    min_length = main_segment_length * min_segment_ratio
+
+    result_whistles = []
+    # fit the gap between the points in each whistle
+    for i, whistle in enumerate(cleaned_whistles):
+        # check if the whistle has gap in x coordinates
+        if len(whistle) < 2:
+            continue
+        start = whistle[0, 0]
+        end = whistle[-1, 0]
+        if end - start + 1 != len(whistle):
+            processed_segment = [whistle[0]]
+            
+            for i in range(len(whistle) - 1):
+                current = whistle[i]
+                next_point = whistle[i + 1]
+                # Generate intermediate points
+                intermediate_points = bresenham_line(current, next_point)
+                # Add intermediate points
+                processed_segment.extend(intermediate_points[1:])
+            
+            processed_segment = np.array(processed_segment)
+            unique_x = np.unique(processed_segment[:, 0])
+            averaged_y = np.zeros_like(unique_x)
+            for i, x in enumerate(unique_x):
+                y_values = processed_segment[processed_segment[:, 0] == x][:, 1]
+                averaged_y[i] = int(np.round(np.mean(y_values)))
+            processed_segment = np.column_stack((unique_x, averaged_y))
+        else:
+            processed_segment = whistle
+        if len(processed_segment) > min_length:
+            result_whistles.append(np.array(processed_segment))
+
+    return result_whistles
+
+
+def mask_to_whistle(mask, max_gap=25, min_segment_ratio = 0.1):
+    """convert the instance mask to whistle contour, use skeleton methods
+    
+    Args
+        mask: instance mask (H, W)
+    Return
+        whistle: (N,2) in pixel coordinates
+    """
+    mask = mask.astype(np.uint8)
+    skeleton = skeletonize(mask).astype(np.uint8)
+    border_mask = np.zeros_like(mask, dtype=bool)
+    border_mask[:, [0, -1]] = True
+    border_pixels = mask & border_mask
+    skeleton = skeleton | border_pixels
+    whistle = np.array(np.nonzero(skeleton)).T # [(y, x]
+    whistle = np.flip(whistle, axis=1)  # [(x, y)]
+    whistle = np.unique(whistle, axis=0)  # remove duplicate points
+    whistle = whistle[whistle[:, 0].argsort()]
+    assert whistle.ndim ==2 and whistle.shape[1] == 2, f"whistle shape: {whistle.shape}"
+
+    result_whistles = clean_whistle(whistle)
 
     return result_whistles
 
@@ -1352,3 +1473,9 @@ def summarize_whistle_results(accumulated_res):
         'f1_valid': 2 * precision_valid * recall_valid / (precision_valid + recall_valid) if (precision_valid + recall_valid) > 0 else 0
     }
     return summary
+
+if __name__ == "__main__":
+    import pickle
+    whistle = pickle.load(open('/home/asher/Desktop/projects/instance_whistle/test_whistle1.pkl', 'rb'))
+    w1 = clean_whistle_ori(whistle)
+    w2 = clean_whistle(whistle)
