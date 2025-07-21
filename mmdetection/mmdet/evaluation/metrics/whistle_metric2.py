@@ -33,8 +33,12 @@ from tqdm import tqdm
 import pycocotools.mask as maskUtils
 from rich import print as rprint
 from whistle_prompter import utils
-from whistle_prompter.utils.write_bin import writeTimeFrequencyBinary, writeContoursBinary
+from whistle_prompter.utils.write_binary import writeTimeFrequencyBinary, writeContoursBinary
 import os
+# FIRST convert warnings to exceptions
+import warnings
+from numpy.exceptions import RankWarning
+warnings.filterwarnings('error', category=RankWarning)
 
 @METRICS.register_module()
 class WhistleMetric2(BaseMetric):
@@ -275,7 +279,7 @@ class WhistleMetric2(BaseMetric):
 
         # DEBUG: 
         # stems = stems['train']
-        stems = ['Qx-Tt-SCI0608-N1-060814-121518']
+        # stems = ['Qx-Dc-SC03-TAT09-060516-173000']
 
 
         # add img_id in same audio file
@@ -284,7 +288,54 @@ class WhistleMetric2(BaseMetric):
         for id, img in self._coco_api.imgs.items():
             audio_to_img[img['audio_filename']][img['start_frame']] = id  # {stem: {start_frame: img_id}}
         
- 
+
+        frame_width = 1500  # 1500 pixels = 300ms (since 1 pixel = 0.2ms)
+        freq_height = 769  # 769 pixels = 125Hz (since 1 pixel = 125Hz)
+
+        def cut_whistle_outrange(whistles, 
+                                top_cutoff = 368, # (96000-50000)/125
+                                bottom_cutoff = 729 # 769 - 5000/125
+                    ):
+            """Cut whistles that are out of range."""
+            filtered_whistles = []
+            for whistle in whistles:
+                # Find points that are below the top_cutoff (points below top_cutoff are valid)
+                valid_indices = (whistle[:, 1] > top_cutoff) & (whistle[:, 1] < bottom_cutoff)
+
+                # If no valid points, skip this whistle entirely
+                if not np.any(valid_indices):
+                    continue
+                
+                # Find continuous segments above the cutoff
+                segments = []
+                current_segment = []
+                for i, (point, is_valid) in enumerate(zip(whistle, valid_indices)):
+                    if is_valid:
+                        current_segment.append(point)
+                    elif current_segment:  # End of a valid segment
+                        segments.append(np.array(current_segment))
+                        current_segment = []
+                            
+                # the last segment if it exists
+                if current_segment:
+                    segments.append(np.array(current_segment))
+                
+                # Add all valid segments to our filtered list
+                filtered_whistles.extend(segments)
+            return filtered_whistles
+        
+        def filter_whistles(whistles, length_thre=10):
+            """Filter whistles based on length and frequency range."""
+            filtered_whistles = []
+            for whistle in whistles:
+                freq_range = whistle[-1].max() - whistle[0].min()
+                # Check if the whistle has enough unique x-coordinates
+                if len(whistle) < length_thre or freq_range < length_thre:
+                    continue
+                else:
+                    filtered_whistles.append(whistle)
+            return filtered_whistles
+
         img_to_whistles = dict()
         for stem in stems:
             start_frames = list(audio_to_img[stem].keys())
@@ -305,17 +356,10 @@ class WhistleMetric2(BaseMetric):
             #     ann_ids = self._coco_api.getAnnIds(imgIds=img_id)
             #     anns = self._coco_api.loadAnns(ann_ids)
             #     coco_whistles[sf] = {ann['id']: mask_to_whistle(self._coco_api.annToMask(ann)) for ann in anns}  # {start_frame: {ann_id: whistle} ...}
-            
-
 
             # Merge whistles that are cut at frame boundaries
             merged_whistles = []
             dt_whistles = []  # Will contain both merged and non-merged whistles
-            frame_width = 1500  # 1500 pixels = 300ms (since 1 pixel = 0.2ms)
-            freq_height = 769  # 769 pixels = 125Hz (since 1 pixel = 125Hz)
-            top_cutoff = 368  # (96000-50000)/125
-            bottom_cutoff = 729 # 769 - 5000/125
-            length_thre = 6
 
             sorted_frames = sorted(coco_whistles.keys())
             # Track whistles that have already been merged to avoid re-merging
@@ -399,37 +443,8 @@ class WhistleMetric2(BaseMetric):
             dt_whistles.extend(merged_whistles)
             
             # Filter out whistle segments that are outside the frequency range
-            filtered_dt_whistles = []
-            for whistle in dt_whistles:
-                # Find points that are below the top_cutoff (points below top_cutoff are valid)
-                valid_indices = (whistle[:, 1] > top_cutoff) & (whistle[:, 1] < bottom_cutoff)
-
-                # If no valid points, skip this whistle entirely
-                if not np.any(valid_indices):
-                    continue
-                
-                # Find continuous segments above the cutoff
-                segments = []
-                current_segment = []
-                for i, (point, is_valid) in enumerate(zip(whistle, valid_indices)):
-                    if is_valid:
-                        current_segment.append(point)
-                    elif current_segment:  # End of a valid segment
-                        if len(current_segment) > length_thre:  # remove too short segments
-                            duration = current_segment[-1][0] - current_segment[0][0]
-                            if duration > 5: 
-                                segments.append(np.array(current_segment))
-                        current_segment = []
-                               
-                # the last segment if it exists
-                if current_segment and len(current_segment) > length_thre:
-                        duration = current_segment[-1][0] - current_segment[0][0]
-                        if duration > 5: 
-                            segments.append(np.array(current_segment))
-                
-                # Add all valid segments to our filtered list
-                filtered_dt_whistles.extend(segments)
-            dt_whistles = filtered_dt_whistles
+            dt_whistles = cut_whistle_outrange(dt_whistles)
+            dt_whistles = filter_whistles(dt_whistles)
 
             # apply NMS to remove overlapping whistles
             dt_whistles = whistle_nms(dt_whistles)
@@ -460,14 +475,17 @@ class WhistleMetric2(BaseMetric):
             binfile = os.path.join('../data/cross/anno_refined', f'{stem}.bin')
             gt_tonals = utils.load_tonal_reader(binfile)
 
-            gt_tonals_pix = []
+            gt_whistles = []
             for i, gt_traj in enumerate(gt_tonals):
                 traj_pix = utils.tf_to_pix(gt_traj, width=np.inf)
                 traj_pix = unique_pix(traj_pix)
-                gt_tonals_pix.append(traj_pix)
+                gt_whistles.append(traj_pix)
+
+            # gt_whistles = cut_whistle_outrange(gt_whistles)
+            # gt_whistles = filter_whistles(gt_whistles)
 
             img_to_whistles[stem]={
-                'gts': gt_tonals_pix,
+                'gts': gt_whistles,
                 'dts': dt_whistles,
                 'w': torch.inf,
                 'img_id': stem,
@@ -483,6 +501,8 @@ class WhistleMetric2(BaseMetric):
         rprint(summary)
 
         return eval_results
+
+
 
 def whistle_nms(dt_whistles: List[np.ndarray], 
                          freq_deviation_threshold: float = 2,
@@ -587,8 +607,10 @@ def should_suppress_by_deviation(longer_whistle: dict, shorter_whistle: dict,
         return False
     
     # Calculate frequency deviation between overlapped segments
-    deviation = np.mean(np.abs(longer_overlap - shorter_overlap))
-
+    try:
+        deviation = np.mean(np.abs(longer_overlap - shorter_overlap))
+    except Exception as e:
+        import pdb; pdb.set_trace()
 
     return deviation <= freq_deviation_threshold
 
@@ -966,7 +988,6 @@ class PolynomialRegression:
             # Adjust the degree based on the number of observations.
             # The degree must be less than the number of points minus 1
             # (for fitting, usually N-1 is max degree for N points).
-            # The original Java code uses x.length - 2, which is more conservative.
             self.degree = min(self.num_observations - 2, self.degree)
             if self.degree < 0: # Ensure degree is not negative if num_observations is small (e.g., 1)
                 self.degree = 0
@@ -1071,8 +1092,11 @@ def traverse_peaks(peaks: OrderedDict, max_gap_x=25, max_gap_y =8, recent_fit = 
                     x_vector = np.array(whistle)[-recent_fit:, 0]
                     y_vector = np.array(whistle)[-recent_fit:, 1]
                     while True:
-                        poly = PolynomialRegression(x_vector, y_vector, degree=degree)
-                        if poly.R2_ADJ > 0.7 or len(x_vector) < degree*3 or poly.sdRes < 2:
+                        try:
+                            poly = PolynomialRegression(x_vector, y_vector, degree=degree)
+                        except RankWarning as e:
+                            import pdb; pdb.set_trace()
+                        if poly.R2_ADJ > 0.7 or len(x_vector) <= degree*3 or poly.sdRes <= 2:
                             error= poly.get_squared_error(x, y)
                             if error < min_error:
                                 min_error = error
@@ -1083,15 +1107,18 @@ def traverse_peaks(peaks: OrderedDict, max_gap_x=25, max_gap_y =8, recent_fit = 
                     for degree in range(1, 3):
                         x_vector = np.array(whistle)[:, 0]
                         y_vector = np.array(whistle)[:, 1]
-                        poly = PolynomialRegression(x_vector, y_vector, degree=degree)
-                        if poly.R2_ADJ > 0.7 or len(x_vector) < degree*3 or poly.sdRes < 2:
+                        try:
+                            poly = PolynomialRegression(x_vector, y_vector, degree=degree)
+                        except RankWarning as e:
+                            import pdb; pdb.set_trace()
+                        if poly.R2_ADJ > 0.7 or len(x_vector) <= degree*3 or poly.sdRes <= 2:
                             error= poly.get_squared_error(x, y)
                             if error < min_error:
                                 min_error = error
                                 best_fit = j
                             break
             # add the point to the best fit whistle
-            if min_error < max_gap_y**2:
+            if min_error < max_gap_y**2 and x != cleaned_whistles[best_fit][-1][0]:
                 cleaned_whistles[best_fit].append((x, y))
             else:
                 # if no good fit is found, start a new whistle
@@ -1113,7 +1140,7 @@ def traverse_peaks(peaks: OrderedDict, max_gap_x=25, max_gap_y =8, recent_fit = 
             continue
         start = whistle[0, 0]
         end = whistle[-1, 0]
-        if end - start + 1 != len(whistle):
+        if not np.all(np.isin(np.arange(start, end + 1), whistle[:, 0])):
             processed_segment = [whistle[0]]
             
             for i in range(len(whistle) - 1):
@@ -1123,16 +1150,17 @@ def traverse_peaks(peaks: OrderedDict, max_gap_x=25, max_gap_y =8, recent_fit = 
                 intermediate_points = bresenham_line(current, next_point)
                 # Add intermediate points
                 processed_segment.extend(intermediate_points[1:])
-            
-            processed_segment = np.array(processed_segment)
-            unique_x = np.unique(processed_segment[:, 0])
-            averaged_y = np.zeros_like(unique_x)
-            for i, x in enumerate(unique_x):
-                y_values = processed_segment[processed_segment[:, 0] == x][:, 1]
-                averaged_y[i] = int(np.round(np.mean(y_values)))
-            processed_segment = np.column_stack((unique_x, averaged_y))
         else:
             processed_segment = whistle
+        
+        processed_segment = np.array(processed_segment)
+        unique_x = np.unique(processed_segment[:, 0])
+        averaged_y = np.zeros_like(unique_x)
+        for i, x in enumerate(unique_x):
+            y_values = processed_segment[processed_segment[:, 0] == x][:, 1]
+            averaged_y[i] = int(np.round(np.mean(y_values)))
+        processed_segment = np.column_stack((unique_x, averaged_y))
+
         if len(processed_segment) > min_length:
             result_whistles.append(np.array(processed_segment))
 
@@ -1231,7 +1259,6 @@ def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, vali
         gts, dts: N, 2 in format of y, x(or t, f)
     """
     gt_num = len(gts)
-    # boudns_gt = np.array(boudns_gt)
     gt_ranges = np.zeros((gt_num, 2))
     gt_durations = np.zeros(gt_num)
 
@@ -1239,11 +1266,6 @@ def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, vali
     dt_ranges = np.zeros((dt_num, 2))
     dt_durations = np.zeros(dt_num)
     
-    if debug:
-        # for i in range(dt_num):
-        #    assert (gts[i]== dts[i]).all(), f"gt and dt should not be the same {len(gts)} vs {len(dts)}"
-        pass
-
     if type(valid_len) == int:
         delt= 1
     else:
@@ -1273,14 +1295,23 @@ def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, vali
     all_covered = []
     all_dura = []
 
+    if valid_gt or debug:
+        waveform, sample_rate = load_wave_file(f'../data/cross/audio/{img_id}.wav')
+        spect_power_db= wave_to_spect(waveform, sample_rate)
+        H, W = spect_power_db.shape[-2:]
+        spect_snr = np.zeros_like(spect_power_db)
+        block_size = 1500  # 300ms
+        broadband = 0.01
+        search_row = 4
+        ratio_above_snr = 0.3
+        for i in range(0, H, block_size):
+            spect_snr[i:i+block_size] = snr_spect(spect_power_db[i:i+block_size], click_thr_db=10, broadband_thr_n=broadband*H )
+        spect_snr = np.flipud(spect_snr) # flip frequency axis, low freq at the bottom
+
     # go through each ground truth
     for gt_idx, gt in enumerate(gts):
         gt_start_x, gt_end_x = gt_ranges[gt_idx]
         gt_dura = gt_durations[gt_idx]
-
-        # if gt_dura < 2:
-        #     continue
-
         # Note: remove interpolation and snr validation that filter low gt snr level
         # which requires addition input
         dt_start_xs, dt_end_xs = dt_ranges[:, 0], dt_ranges[:, 1]
@@ -1291,16 +1322,22 @@ def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, vali
         matched = False
         deviations = []
         covered = 0
-        # cnt = 0
-        # dt_matched = []
-        # dt_matched_dev = []
         # Note remove duration filter short < 75 pix whistle
-
         valid = True
         if valid_gt:
-            if gt_dura < valid_len: # or boudns_gt[gt_idx] < 3:
+            search_row_low = np.minimum(np.maximum(gt[:, 1] - search_row, 0), H)
+            search_row_high = np.maximum(np.minimum(gt[:, 1] + search_row, H), 0)
+            gt_cols = gt[:, 0][gt[:, 0] < W]
+            try:
+                spec_search = [np.max(spect_snr[l:h, col]).item() for i, (l,h, col) in enumerate(zip(search_row_low, search_row_high, gt_cols))] 
+            except: 
+                import pdb; pdb.set_trace()
+            sorted_search_snr = np.sort(spec_search)
+            bound_idx = max(0, round(len(sorted_search_snr) * (1- ratio_above_snr))-1)
+            gt_snr = sorted_search_snr[bound_idx]
+            if gt_dura < valid_len or gt_snr < 3:
                 valid= False
-        # rprint(f'valid:{valid}, gt_dura: {gt_dura}, boudns_gt: {boudns_gt[gt_idx]}')
+
 
         for ovlp_dt_idx in ovlp_dt_ids:
             ovlp_dt = dts[ovlp_dt_idx]
@@ -1313,14 +1350,9 @@ def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, vali
             gt_ovlp_ys = gt[:, 1][np.searchsorted(gt[:, 0], dt_ovlp_xs)]
             deviation = np.abs(gt_ovlp_ys - dt_ovlp_ys)
             deviation_tolerence = deviation_tolerence
-            if debug:
-                # deviation_tolerence = 0.1
-                pass
             if len(deviation)> 0 and np.mean(deviation) <= deviation_tolerence:
                 matched = True
                 
-                # cnt += 1
-                # dt_matched.append(ovlp_dt_idx)
                 if ovlp_dt_idx in dt_false_pos_all:
                     dt_false_pos_all.remove(ovlp_dt_idx)
                 # TODO: has multiplications
@@ -1333,15 +1365,6 @@ def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, vali
                 covered += dt_ovlp_xs.max() - dt_ovlp_xs.min() + delt
                 if valid:
                     dt_true_pos_valid.append(ovlp_dt_idx)
-
-
-        # if debug and cnt > 1:
-        #     rprint(f"img_id: {img_id}, multiplication gt_id: {gt_idx} cnt: {cnt}")
-        #     rprint(f"gt: {gt.T}",)
-        #     for i, idx in enumerate(dt_matched):
-        #         rprint(f"dt_idx: {idx}")
-        #         rprint(f"dt: {dts[idx].T}")
-        #         print(f"deviation: {dt_matched_dev[i].mean()}")
         
         if matched:
             gt_matched_all.append(gt_idx)
@@ -1359,24 +1382,9 @@ def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, vali
         all_dura.append(gt_dura) # move out from matched
 
     if debug:
-        # if dt_false_pos_all:
-        #     for dt_fp_idx in dt_false_pos_all:
-        #         rprint(f'img_id: {img_id}, dt_id:{dt_fp_idx}, fp_num: {len(dt_false_pos_all)}')
-        #         rprint(f'dt: {dts[dt_fp_idx]}')
-        #         # rprint(f'gt: {gts[dt_fp_idx]}')
         freq_height = 769
         dt_false_pos_tf_all = [pix_to_tf(dts[idx], height=freq_height) for idx in dt_false_pos_all]
-
-        waveform, sample_rate = load_wave_file(f'../data/cross/audio/{img_id}.wav')
-        spect_power_db= wave_to_spect(waveform, sample_rate)
-        H, W = spect_power_db.shape[-2:]
-        spect_snr = np.zeros_like(spect_power_db)
-        block_size = 1500  # 300ms
-        broadband = 0.01
-        for i in range(0, H, block_size):
-            spect_snr[i:i+block_size] = snr_spect(spect_power_db[i:i+block_size], click_thr_db=10, broadband_thr_n=broadband*H )
-        spect_snr = np.flipud(spect_snr) # flip frequency axis, low freq at the bottom
-        tonals_snr = [spect_snr[dts[idx][:, 1].astype(int),dts[idx][:, 0].astype(int)]  for idx in dt_false_pos_all]
+        tonals_snr = [spect_snr[dts[idx][:, 1].astype(int),dts[idx][:, 0].astype(int)] for idx in dt_false_pos_all]
         tonal_save(img_id, dt_false_pos_tf_all, tonals_snr, 'mask2former_swin_fp')
         dt_snrs = [np.mean(snr) for snr in tonals_snr]
 
