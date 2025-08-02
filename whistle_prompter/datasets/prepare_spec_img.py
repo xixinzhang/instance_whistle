@@ -240,13 +240,7 @@ if __name__ == "__main__":
         test_filenames.append(f"data/cross/audio/{stem}.wav")
     for stem in meta["train"]:
         train_filenames.append(f"data/cross/audio/{stem}.wav")
-    # filenames = filenames[:2]
-    # filenames = 'data/cross/audio/Qx-Tt-SCI0608-N1-060814-123433.wav'
-    filenames = ['data/cross/audio/Qx-Dc-SC03-TAT09-060516-173000.wav']
-    # filenames = ['data/cross/audio/Qx-Dc-CC0411-TAT11-CH2-041114-154040-s.wav']
-    # with open("data/meta.json") as f:
-    #     meta = json.load(f)
-    # filenames = [f'data/audio/{f}.wav' for f in meta['data']["test"]]
+    filenames = ['data/cross/audio/palmyra092007FS192-070924-205730.wav']
     # filenames = deepcopy(train_filenames)
     # filenames = deepcopy(test_filenames)
 

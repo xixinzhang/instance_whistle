@@ -278,8 +278,7 @@ class WhistleMetric2(BaseMetric):
         stems = stems['test']
 
         # DEBUG: 
-        # stems = stems['train']
-        # stems = ['Qx-Dc-SC03-TAT09-060516-173000']
+        stems = ['Qx-Tt-SCI0608-N1-060814-121518']
 
 
         # add img_id in same audio file
@@ -547,29 +546,29 @@ def whistle_nms(dt_whistles: List[np.ndarray],
 
     keep = []
     
-    for i in sorted_indices:
-        if i in suppressed:
+    for i, idx in enumerate(sorted_indices):
+        if idx in suppressed:
             continue
             
-        keep.append(i)
-        current_whistle = processed_whistles[i]
+        keep.append(idx)
+        current_whistle = processed_whistles[idx]
         
         if current_whistle is None:
             continue
         
         # Check candidates for suppression using deviation method
-        for j in sorted_indices:
-            if j <= i or j in suppressed:
+        for idx2 in sorted_indices[i + 1:]:
+            if idx2 in suppressed:
                 continue
                 
-            candidate_whistle = processed_whistles[j]
+            candidate_whistle = processed_whistles[idx2]
             if candidate_whistle is None:
                 continue
             
             # Check if they should be merged based on overlapped region deviation
             if should_suppress_by_deviation(current_whistle, candidate_whistle, 
                                           freq_deviation_threshold, overlap_threshold):
-                suppressed.add(j)
+                suppressed.add(idx2)
 
     return [dt_whistles[i] for i in keep]
 
