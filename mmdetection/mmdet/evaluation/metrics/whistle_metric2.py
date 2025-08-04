@@ -278,7 +278,7 @@ class WhistleMetric2(BaseMetric):
         stems = stems['test']
 
         # DEBUG: 
-        stems = ['Qx-Tt-SCI0608-N1-060814-121518']
+        # stems = ['Qx-Tt-SCI0608-N1-060814-121518']
 
 
         # add img_id in same audio file
