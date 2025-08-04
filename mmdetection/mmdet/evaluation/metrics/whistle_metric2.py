@@ -278,7 +278,7 @@ class WhistleMetric2(BaseMetric):
         stems = stems['test']
 
         # DEBUG: 
-        stems = ['Qx-Tt-SCI0608-N1-060814-121518']
+        # stems = ['Qx-Tt-SCI0608-N1-060814-121518']
 
 
         # add img_id in same audio file
@@ -288,7 +288,7 @@ class WhistleMetric2(BaseMetric):
             audio_to_img[img['audio_filename']][img['start_frame']] = id  # {stem: {start_frame: img_id}}
         
 
-        frame_width = 1500  # 1500 pixels = 300ms (since 1 pixel = 0.2ms)
+        block_size = 1500  # 1500 pixels = 300ms (since 1 pixel = 0.2ms)
         freq_height = 769  # 769 pixels = 125Hz (since 1 pixel = 125Hz)
 
         def cut_whistle_outrange(whistles, 
@@ -370,7 +370,7 @@ class WhistleMetric2(BaseMetric):
                 next_frame = sorted_frames[i + 1]
                 
                 # Check if frames are consecutive (300ms apart)
-                if next_frame - current_frame == frame_width:
+                if next_frame - current_frame == block_size:
                     current_whistles = coco_whistles[current_frame]
                     next_whistles = coco_whistles[next_frame]
                     
@@ -381,7 +381,7 @@ class WhistleMetric2(BaseMetric):
                             continue
                             
                         # Check if whistle is cut at right edge (x values close to frame width)
-                        if np.any(c_whistle[:, 0] >= frame_width - 1):  # Within 1ms of edge
+                        if np.any(c_whistle[:, 0] >= block_size - 1):  # Within 1ms of edge
                             # Look for matching whistles in next frame cut at left edge
                             for n_id, n_whistle in next_whistles.items():
                                 # Skip if this whistle has already been merged
@@ -391,7 +391,7 @@ class WhistleMetric2(BaseMetric):
                                 # Check if whistle starts at left edge
                                 if np.any(n_whistle[:, 0] < 1):  # Within 1ms of edge
                                     # Get rightmost points of current whistle
-                                    c_right_points = c_whistle[c_whistle[:, 0] >= frame_width - 1]
+                                    c_right_points = c_whistle[c_whistle[:, 0] >= block_size - 1]
                                     # Get leftmost points of next whistle
                                     n_left_points = n_whistle[n_whistle[:, 0] < 1]
                                     
@@ -404,7 +404,7 @@ class WhistleMetric2(BaseMetric):
                                         # Merge the whistles
                                         # Adjust x-coordinates of next whistle by adding frame width (300ms)
                                         n_whistle_adjusted = n_whistle.copy()
-                                        n_whistle_adjusted[:, 0] += frame_width
+                                        n_whistle_adjusted[:, 0] += block_size
                                         
                                         # Combine the whistles
                                         merged_whistle = np.vstack([c_whistle, n_whistle_adjusted])
@@ -452,13 +452,16 @@ class WhistleMetric2(BaseMetric):
             waveform, sample_rate = load_wave_file(f'../data/cross/audio/{stem}.wav')
             spect_power_db= wave_to_spect(waveform, sample_rate)
             H, W = spect_power_db.shape[-2:]
+            # clip whistles to [0, H-1][0, W-1]
+            dt_whistles = [np.clip(whistle, [0, 0], [W-1, H-1]) for whistle in dt_whistles]
+
             spect_snr = np.zeros_like(spect_power_db)
             block_size = 1500  # 300ms
             broadband = 0.01
-            for i in range(0, H, block_size):
-                spect_snr[i:i+block_size] = snr_spect(spect_power_db[i:i+block_size], click_thr_db=10, broadband_thr_n=broadband*H )
+            for i in range(0, W, block_size):
+                spect_snr[:, i:i+block_size] = snr_spect(spect_power_db[:, i:i+block_size], click_thr_db=10, broadband_thr_n=broadband*H )
             spect_snr = np.flipud(spect_snr) # flip frequency axis, low freq at the bottom
-            tonals_snr = [spect_snr[w[:, 1].astype(int),w[:, 0].astype(int).clip(0, W-1)] for w in dt_whistles]
+            tonals_snr = [spect_snr[w[:, 1].astype(int),w[:, 0].astype(int)] for w in dt_whistles]
             dt_whistles_tf = [pix_to_tf(whistle, height=freq_height) for whistle in dt_whistles]
             tonal_save(stem, dt_whistles_tf, tonals_snr, model_name='mask2former')
 
@@ -495,7 +498,7 @@ class WhistleMetric2(BaseMetric):
         rprint(f'gathered {sum_gts} gt whistles, {sum_dts} dt whistles within')
         eval_results = OrderedDict()
 
-        res = accumulate_wistle_results(img_to_whistles, debug=True, valid_gt=True, valid_len = 75, deviation_tolerence= 350/125)
+        res = accumulate_whistle_results(img_to_whistles, debug=True, valid_gt=True, valid_len = 75, deviation_tolerence= 350/125)
         summary = summarize_whistle_results(res)
         rprint(summary)
 
@@ -1064,7 +1067,7 @@ def traverse_peaks(peaks: OrderedDict, max_gap_x=25, max_gap_y =8, recent_fit = 
     xs = list(peaks.keys())
     dis = np.abs(np.diff(xs))
     # remove the outliers at the beginning
-    start_idx = np.nonzero(dis < max_gap_x)[0][0]
+    start_idx = np.nonzero(dis < max_gap_x)[0][0] if len(dis) > 1 else 0
     for i, (x, ys) in enumerate(peaks.items()):
         if i < start_idx:
             continue
@@ -1078,6 +1081,7 @@ def traverse_peaks(peaks: OrderedDict, max_gap_x=25, max_gap_y =8, recent_fit = 
                 # if the gap is too large, start a new whistle
                 cleaned_whistles.append([(x, ys[0])])
                 continue
+        # add ys to the right branch
         for y in ys:
             min_error = np.inf
             best_fit = 0
@@ -1127,11 +1131,16 @@ def traverse_peaks(peaks: OrderedDict, max_gap_x=25, max_gap_y =8, recent_fit = 
     # Sort segments by their x-range length (descending)
     cleaned_whistles.sort(key=lambda s: s[-1, 0] - s[0, 0], reverse=True)
     
-      # Determine which segments to keep (long enough compared to main segment)
-    main_segment_length = cleaned_whistles[0][-1, 0] - cleaned_whistles[0][0, 0]
+    result_whistles = []
+    if len(cleaned_whistles) == 0:
+        return result_whistles
+    # Determine which segments to keep (long enough compared to main segment)
+    try:
+        main_segment_length = cleaned_whistles[0][-1, 0] - cleaned_whistles[0][0, 0]
+    except:
+        import pdb; pdb.set_trace()
     min_length = main_segment_length * min_segment_ratio
 
-    result_whistles = []
     # fit the gap between the points in each whistle
     for i, whistle in enumerate(cleaned_whistles):
         # check if the whistle has gap in x coordinates
@@ -1303,8 +1312,8 @@ def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, vali
         broadband = 0.01
         search_row = 4
         ratio_above_snr = 0.3
-        for i in range(0, H, block_size):
-            spect_snr[i:i+block_size] = snr_spect(spect_power_db[i:i+block_size], click_thr_db=10, broadband_thr_n=broadband*H )
+        for i in range(0, W, block_size):
+            spect_snr[:, i:i+block_size] = snr_spect(spect_power_db[:, i:i+block_size], click_thr_db=10, broadband_thr_n=broadband*H)
         spect_snr = np.flipud(spect_snr) # flip frequency axis, low freq at the bottom
 
     # go through each ground truth
@@ -1411,7 +1420,7 @@ def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, vali
     return res
 
 
-def accumulate_wistle_results(img_to_whistles, valid_gt, valid_len=75,deviation_tolerence = 350/125, debug=False):
+def accumulate_whistle_results(img_to_whistles, valid_gt, valid_len=75,deviation_tolerence = 350/125, debug=False):
     """accumulate the whistle results for all images (segment or entire audio)"""
     accumulated_res = {
         'dt_false_pos_all': 0,

@@ -242,7 +242,7 @@ if __name__ == "__main__":
         train_filenames.append(f"data/cross/audio/{stem}.wav")
     filenames = ['data/cross/audio/palmyra092007FS192-070924-205730.wav']
     # filenames = deepcopy(train_filenames)
-    # filenames = deepcopy(test_filenames)
+    filenames = deepcopy(test_filenames)
 
     segments_dict = audios_to_segments_dict(filenames)
     print(segments_dict.keys())
