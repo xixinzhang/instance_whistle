@@ -278,7 +278,7 @@ class WhistleMetric2(BaseMetric):
         stems = stems['test']
 
         # DEBUG: 
-        stems = ['Qx-Tt-SCI0608-N1-060814-121518']
+        # stems = ['palmyra092007FS192-070924-205730']
 
 
         # add img_id in same audio file
@@ -291,50 +291,7 @@ class WhistleMetric2(BaseMetric):
         block_size = 1500  # 1500 pixels = 300ms (since 1 pixel = 0.2ms)
         freq_height = 769  # 769 pixels = 125Hz (since 1 pixel = 125Hz)
 
-        def cut_whistle_outrange(whistles, 
-                                top_cutoff = 368, # (96000-50000)/125
-                                bottom_cutoff = 729 # 769 - 5000/125
-                    ):
-            """Cut whistles that are out of range."""
-            filtered_whistles = []
-            for whistle in whistles:
-                # Find points that are below the top_cutoff (points below top_cutoff are valid)
-                valid_indices = (whistle[:, 1] > top_cutoff) & (whistle[:, 1] < bottom_cutoff)
-
-                # If no valid points, skip this whistle entirely
-                if not np.any(valid_indices):
-                    continue
-                
-                # Find continuous segments above the cutoff
-                segments = []
-                current_segment = []
-                for i, (point, is_valid) in enumerate(zip(whistle, valid_indices)):
-                    if is_valid:
-                        current_segment.append(point)
-                    elif current_segment:  # End of a valid segment
-                        segments.append(np.array(current_segment))
-                        current_segment = []
-                            
-                # the last segment if it exists
-                if current_segment:
-                    segments.append(np.array(current_segment))
-                
-                # Add all valid segments to our filtered list
-                filtered_whistles.extend(segments)
-            return filtered_whistles
-        
-        def filter_whistles(whistles, length_thre=10):
-            """Filter whistles based on length and frequency range."""
-            filtered_whistles = []
-            for whistle in whistles:
-                freq_range = whistle[-1].max() - whistle[0].min()
-                # Check if the whistle has enough unique x-coordinates
-                if len(whistle) < length_thre or freq_range < length_thre:
-                    continue
-                else:
-                    filtered_whistles.append(whistle)
-            return filtered_whistles
-
+        # post processing
         img_to_whistles = dict()
         for stem in stems:
             start_frames = list(audio_to_img[stem].keys())
@@ -349,97 +306,8 @@ class WhistleMetric2(BaseMetric):
             result_whistle = self.results2whistles(preds, img_ids, filter_dt=filter_dt)  # {img_id: {id: whistle ...} }
             coco_whistles = {img_to_frames[img_id]: whistles for img_id, whistles in result_whistle.items()}  # {start_frame: {id: whistle} ...}
 
-            # # gt eval
-            # coco_whistles = dict()
-            # for i, (sf, img_id) in enumerate(zip(sorted_frames, img_ids)):
-            #     ann_ids = self._coco_api.getAnnIds(imgIds=img_id)
-            #     anns = self._coco_api.loadAnns(ann_ids)
-            #     coco_whistles[sf] = {ann['id']: mask_to_whistle(self._coco_api.annToMask(ann)) for ann in anns}  # {start_frame: {ann_id: whistle} ...}
-
             # Merge whistles that are cut at frame boundaries
-            merged_whistles = []
-            dt_whistles = []  # Will contain both merged and non-merged whistles
-
-            sorted_frames = sorted(coco_whistles.keys())
-            # Track whistles that have already been merged to avoid re-merging
-            merged_ids = set()
-
-            # First pass: identify and merge whistles at frame boundaries
-            for i in range(len(sorted_frames) - 1):
-                current_frame = sorted_frames[i]
-                next_frame = sorted_frames[i + 1]
-                
-                # Check if frames are consecutive (300ms apart)
-                if next_frame - current_frame == block_size:
-                    current_whistles = coco_whistles[current_frame]
-                    next_whistles = coco_whistles[next_frame]
-                    
-                    # Find whistles that might be cut at right edge of current frame
-                    for c_id, c_whistle in current_whistles.items():
-                        # Skip if this whistle has already been merged
-                        if c_id in merged_ids:
-                            continue
-                            
-                        # Check if whistle is cut at right edge (x values close to frame width)
-                        if np.any(c_whistle[:, 0] >= block_size - 1):  # Within 1ms of edge
-                            # Look for matching whistles in next frame cut at left edge
-                            for n_id, n_whistle in next_whistles.items():
-                                # Skip if this whistle has already been merged
-                                if n_id in merged_ids:
-                                    continue
-                                    
-                                # Check if whistle starts at left edge
-                                if np.any(n_whistle[:, 0] < 1):  # Within 1ms of edge
-                                    # Get rightmost points of current whistle
-                                    c_right_points = c_whistle[c_whistle[:, 0] >= block_size - 1]
-                                    # Get leftmost points of next whistle
-                                    n_left_points = n_whistle[n_whistle[:, 0] < 1]
-                                    
-                                    # Check if y-coordinates are similar (frequency alignment within 250Hz)
-                                    # Since each pixel is 125Hz, a difference of 2 pixels = 250Hz
-                                    c_avg_y = np.mean(c_right_points[:, 1])
-                                    n_avg_y = np.mean(n_left_points[:, 1])
-                                    
-                                    if abs(c_avg_y - n_avg_y) <= 2:  # 2 pixels = 250Hz threshold
-                                        # Merge the whistles
-                                        # Adjust x-coordinates of next whistle by adding frame width (300ms)
-                                        n_whistle_adjusted = n_whistle.copy()
-                                        n_whistle_adjusted[:, 0] += block_size
-                                        
-                                        # Combine the whistles
-                                        merged_whistle = np.vstack([c_whistle, n_whistle_adjusted])
-                                        # Sort by time (x-coordinate)
-                                        merged_whistle = merged_whistle[merged_whistle[:, 0].argsort()]
-                                        merged_whistle[:, 0] += current_frame 
-                                        
-                                        # Convert to time-frequency coordinates
-                                        merged_whistle_pix = merged_whistle.copy().astype(int)
-                                        # merged_whistle_pix[:, 0] =   (merged_whistle_pix[:, 0]-0.5) * 0.002 # Convert to milliseconds
-                                        # merged_whistle_pix[:, 1] = (freq_height - 1 - merged_whistle_pix[:, 1] - 0.5) * 125  # Convert to frequency
-                                        
-                                        # Store the merged whistle
-                                        merged_whistles.append(merged_whistle_pix)
-                                        
-                                        # Mark these whistles as merged so they won't be considered again
-                                        merged_ids.add(c_id)
-                                        merged_ids.add(n_id)
-
-            # Second pass: add all non-merged whistles to the complete list
-            for frame, whistle_dict in coco_whistles.items():
-                for whistle_id, whistle in whistle_dict.items():
-                    # Skip if this whistle was already part of a merge
-                    if whistle_id in merged_ids:
-                        continue
-                    
-                    # Convert to time-frequency coordinates
-                    whistle_pix = whistle.copy().astype(int)
-                    whistle_pix[:, 0] = frame + whistle_pix[:, 0]  # Add frame start
-                    
-                    # Add to the complete list
-                    dt_whistles.append(whistle_pix)
-
-            # Add merged whistles to the complete list
-            dt_whistles.extend(merged_whistles)
+            dt_whistles = connect_whistles_at_boundaries(coco_whistles, block_size)
             
             # Filter out whistle segments that are outside the frequency range
             dt_whistles = cut_whistle_outrange(dt_whistles)
@@ -447,6 +315,9 @@ class WhistleMetric2(BaseMetric):
 
             # apply NMS to remove overlapping whistles
             dt_whistles = whistle_nms(dt_whistles)
+
+            # Merge groups of segments after NMS
+            dt_whistles = merge_whistle_groups(dt_whistles)
 
             # save the whistles to binary file
             waveform, sample_rate = load_wave_file(f'../data/cross/audio/{stem}.wav')
@@ -456,7 +327,6 @@ class WhistleMetric2(BaseMetric):
             dt_whistles = [np.clip(whistle, [0, 0], [W-1, H-1]) for whistle in dt_whistles]
 
             spect_snr = np.zeros_like(spect_power_db)
-            block_size = 1500  # 300ms
             broadband = 0.01
             for i in range(0, W, block_size):
                 spect_snr[:, i:i+block_size] = snr_spect(spect_power_db[:, i:i+block_size], click_thr_db=10, broadband_thr_n=broadband*H )
@@ -492,7 +362,7 @@ class WhistleMetric2(BaseMetric):
                 'w': torch.inf,
                 'img_id': stem,
             }
-        # import pdb; pdb.set_trace()
+
         sum_gts = sum([len(whistles['gts']) for whistles in img_to_whistles.values()])
         sum_dts = sum([len(whistles['dts']) for whistles in img_to_whistles.values()])
         rprint(f'gathered {sum_gts} gt whistles, {sum_dts} dt whistles within')
@@ -505,6 +375,200 @@ class WhistleMetric2(BaseMetric):
         return eval_results
 
 
+def connect_whistles_at_boundaries(coco_whistles, block_size=1500, freq_threshold=2):
+    """
+    Merge whistles that are cut at frame boundaries.
+
+    Args:
+        coco_whistles: {start_frame: {id: whistle}}
+        block_size: int, frame width in pixels
+        freq_threshold: int, max allowed y difference (in pixels) for merging
+
+    Returns:
+        merged_whistles: list of merged whistle arrays
+        merged_ids: set of whistle ids that were merged
+    """
+    merged_whistles = []
+    merged_ids = set()
+    sorted_frames = sorted(coco_whistles.keys())
+
+    # First pass: identify and merge whistles at frame boundaries
+    for i in range(len(sorted_frames) - 1):
+        current_frame = sorted_frames[i]
+        next_frame = sorted_frames[i + 1]
+        if next_frame - current_frame != block_size:
+            continue
+        current_whistles = coco_whistles[current_frame]
+        next_whistles = coco_whistles[next_frame]
+        for c_id, c_whistle in current_whistles.items():
+            if c_id in merged_ids or not np.any(c_whistle[:, 0] >= block_size - 1):
+                continue
+            for n_id, n_whistle in next_whistles.items():
+                if n_id in merged_ids or not np.any(n_whistle[:, 0] < 1):
+                    continue
+                c_right_points = c_whistle[c_whistle[:, 0] >= block_size - 1]
+                n_left_points = n_whistle[n_whistle[:, 0] < 1]
+                c_avg_y = np.mean(c_right_points[:, 1])
+                n_avg_y = np.mean(n_left_points[:, 1])
+                if abs(c_avg_y - n_avg_y) <= freq_threshold:
+                    n_whistle_adjusted = n_whistle.copy()
+                    n_whistle_adjusted[:, 0] += block_size
+                    merged_whistle = np.vstack([c_whistle, n_whistle_adjusted])
+                    merged_whistle = merged_whistle[merged_whistle[:, 0].argsort()]
+                    merged_whistle[:, 0] += current_frame
+                    merged_whistles.append(merged_whistle.astype(int))
+                    merged_ids.add(c_id)
+                    merged_ids.add(n_id)
+
+    # Second pass: add all non-merged whistles
+    dt_whistles = []
+    for frame, whistle_dict in coco_whistles.items():
+        for whistle_id, whistle in whistle_dict.items():
+            if whistle_id in merged_ids:
+                continue
+            whistle_pix = whistle.copy().astype(int)
+            whistle_pix[:, 0] = frame + whistle_pix[:, 0]
+            dt_whistles.append(whistle_pix)
+
+    # Add merged whistles to the complete list
+    dt_whistles.extend(merged_whistles)
+    return dt_whistles
+
+def cut_whistle_outrange(whistles, 
+                        top_cutoff = 368, # (96000-50000)/125
+                        bottom_cutoff = 729 # 769 - 5000/125
+            ):
+    """Cut whistles that are out of range."""
+    filtered_whistles = []
+    for whistle in whistles:
+        # Find points that are below the top_cutoff (points below top_cutoff are valid)
+        try:
+            valid_indices = (whistle[:, 1] > top_cutoff) & (whistle[:, 1] < bottom_cutoff)
+        except:
+            import pdb; pdb.set_trace()
+        # If no valid points, skip this whistle entirely
+        if not np.any(valid_indices):
+            continue
+        
+        # Find continuous segments above the cutoff
+        segments = []
+        current_segment = []
+        for i, (point, is_valid) in enumerate(zip(whistle, valid_indices)):
+            if is_valid:
+                current_segment.append(point)
+            elif current_segment:  # End of a valid segment
+                segments.append(np.array(current_segment))
+                current_segment = []
+                    
+        # the last segment if it exists
+        if current_segment:
+            segments.append(np.array(current_segment))
+        
+        # Add all valid segments to our filtered list
+        filtered_whistles.extend(segments)
+    return filtered_whistles
+
+def filter_whistles(whistles, length_thre=10):
+    """Filter whistles based on length and frequency range."""
+    filtered_whistles = []
+    for whistle in whistles:
+        freq_range = whistle[-1].max() - whistle[0].min()
+        # Check if the whistle has enough unique x-coordinates
+        if len(whistle) < length_thre or freq_range < length_thre:
+            continue
+        else:
+            filtered_whistles.append(whistle)
+    return filtered_whistles
+
+ # Merge groups of whistle segments using polynomial fit
+def merge_whistle_groups(whistles, max_gap_x=25, max_gap_y=25, min_fit_window = 20, max_dis=25, r2_threshold=0.92, max_degree=2, deviation_threshold=2):
+    if len(whistles) == 0:
+        return []
+    sorted_whistles = sorted(whistles, key=lambda w: w[0, 0])
+    merged = []
+    used = set()
+    i = 0
+    current = None
+    while i < len(sorted_whistles):
+        if i in used:
+            i += 1
+            continue
+        if current is None: 
+            current = sorted_whistles[i].copy()
+        candidates = []
+        # Find all candidate segments within max_gap_x after current
+        for j in range(i + 1, len(sorted_whistles)):
+            if j in used:
+                continue
+            next_seg = sorted_whistles[j]
+            gap_x = next_seg[0, 0] - current[-1, 0]
+            gap_y = np.abs(next_seg[0, 1] - current[-1, 1])
+            overlap_start = max(current[0, 0], next_seg[0, 0])
+            overlap_end = min(current[-1, 0], next_seg[-1, 0])
+            # Case 1: Not overlapped in x, but within gap
+            if gap_x >= 0 and np.linalg.norm([gap_x, gap_y]) <= max_dis:
+                # Try direct connection (endpoint to startpoint)
+                # Evaluate fitness of connection using polynomial fit
+                fit_window = min(min_fit_window, len(current), len(next_seg))
+                x_fit = np.concatenate([current[-fit_window:,0], next_seg[:fit_window,0]])
+                y_fit = np.concatenate([current[-fit_window:,1], next_seg[:fit_window,1]])
+                poly = PolynomialRegression(x_fit, y_fit, degree=max_degree)
+                x_connect = np.arange(current[-1,0] + 1, next_seg[0,0])
+                # Only add as candidate if fit is good enough
+                candidates.append({
+                    'type': 'connect',
+                    'idx': j,
+                    'R2': poly.R2,
+                    'next_seg': next_seg if gap_x > 0 else next_seg[1:],
+                    'connection': np.column_stack((x_connect, poly.predict(x_connect))).astype(int)
+                })
+
+            # Case 2: Overlapped in x
+            if overlap_end > overlap_start:
+                mask_cur = (current[:, 0] >= overlap_start) & (current[:, 0] <= overlap_end)
+                mask_next = (next_seg[:, 0] >= overlap_start) & (next_seg[:, 0] <= overlap_end)
+                cur_overlap = current[mask_cur]
+                next_overlap = next_seg[mask_next]
+                if len(cur_overlap) > 0 and len(next_overlap) > 0:
+                    # Only consider merging if mean y deviation in overlap is small
+                    deviation = np.mean(np.abs(cur_overlap[:, 1] - next_overlap[:, 1]))
+                    if deviation <= deviation_threshold:
+                        x_connect = np.arange(overlap_start, overlap_end+1)
+                        connection = np.column_stack((x_connect, (cur_overlap[:, 1] + next_overlap[:, 1]) / 2))
+                        # Overlap coincides in x and y, evaluate fitness to extend segment 1 with segment 2's non-overlapped part
+                        fit_window = min(min_fit_window, len(current[:overlap_start]), len(next_overlap[overlap_end:]))
+                        x_fit = np.concatenate([current[:overlap_start, 0], connection[:, 0], next_overlap[overlap_end:, 0]])
+                        y_fit = np.concatenate([current[:overlap_start, 1], connection[:, 1], next_overlap[overlap_end:, 1]])
+                    
+                        poly = PolynomialRegression(x_fit, y_fit, degree=max_degree)
+                        candidates.append({
+                            'type': 'overlap',
+                            'idx': j,
+                            'R2': poly.R2,
+                            'non_overlap_next': (next_seg[next_seg[:, 0] > overlap_end]).astype(int)
+                        })
+
+        # Select best candidate to connect/merge
+        if candidates:
+            # Prioritize by R2 (desc)
+            candidates.sort(key=lambda d: (-d['R2']))
+            best = candidates[0]
+            if best['type'] == 'connect' and best['R2'] > r2_threshold:
+                # Connect segments
+                current = np.vstack([current, best['connection'], best['next_seg']])
+                used.add(best['idx'])
+                continue
+            elif best['type'] == 'overlap' and best['R2'] > r2_threshold:
+                # Merge by extending with non-overlapping part
+                if len(best['non_overlap_next']) > 0:
+                    current = np.vstack([current, best['non_overlap_next']])
+                used.add(best['idx'])
+                continue
+        merged.append(current)
+        i += 1
+        current = None
+
+    return merged
 
 def whistle_nms(dt_whistles: List[np.ndarray], 
                          freq_deviation_threshold: float = 2,
