@@ -43,6 +43,7 @@ def load_annotation(bin_file: Path) -> list[np.ndarray]:
             data = get_dense_annotation(data)  # make the contour continuous
             annos.append(data)
             cur += point_bytes_num
+            print(f"cur: {cur}, total: {total_bytes_num}")
             if cur >= total_bytes_num:
                 break
         print(f"Loaded {len(annos)} annotated whistles from {bin_file.stem}.bin")

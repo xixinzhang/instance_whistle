@@ -4,7 +4,7 @@
 */outputs
 mmdetection/checkpoints
 *pkl
-
+*.zip
 __pycache__
 *.egg-info
 *.png

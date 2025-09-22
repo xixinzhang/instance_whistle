@@ -278,7 +278,7 @@ class WhistleMetric2(BaseMetric):
         stems = stems['test']
 
         # DEBUG: 
-        # stems = ['palmyra092007FS192-070924-205730']
+        # stems = ['Qx-Dd-SCI0608-Ziph-060816-151032']
 
 
         # add img_id in same audio file
@@ -311,6 +311,7 @@ class WhistleMetric2(BaseMetric):
             
             # Filter out whistle segments that are outside the frequency range
             dt_whistles = cut_whistle_outrange(dt_whistles)
+            # Filter out too short whistle segments
             dt_whistles = filter_whistles(dt_whistles)
 
             # apply NMS to remove overlapping whistles
@@ -353,8 +354,8 @@ class WhistleMetric2(BaseMetric):
                 traj_pix = unique_pix(traj_pix)
                 gt_whistles.append(traj_pix)
 
-            # gt_whistles = cut_whistle_outrange(gt_whistles)
-            # gt_whistles = filter_whistles(gt_whistles)
+            gt_whistles = cut_whistle_outrange(gt_whistles)
+            gt_whistles = filter_whistles(gt_whistles)
 
             img_to_whistles[stem]={
                 'gts': gt_whistles,
@@ -481,7 +482,7 @@ def filter_whistles(whistles, length_thre=10):
     return filtered_whistles
 
  # Merge groups of whistle segments using polynomial fit
-def merge_whistle_groups(whistles, max_gap_x=25, max_gap_y=25, min_fit_window = 20, max_dis=25, r2_threshold=0.92, max_degree=2, deviation_threshold=2):
+def merge_whistle_groups(whistles, min_fit_window = 20, max_dis=25, r2_threshold=0.92, max_degree=2, deviation_threshold=2):
     if len(whistles) == 0:
         return []
     sorted_whistles = sorted(whistles, key=lambda w: w[0, 0])
@@ -512,7 +513,10 @@ def merge_whistle_groups(whistles, max_gap_x=25, max_gap_y=25, min_fit_window = 
                 fit_window = min(min_fit_window, len(current), len(next_seg))
                 x_fit = np.concatenate([current[-fit_window:,0], next_seg[:fit_window,0]])
                 y_fit = np.concatenate([current[-fit_window:,1], next_seg[:fit_window,1]])
-                poly = PolynomialRegression(x_fit, y_fit, degree=max_degree)
+                try:
+                    poly = PolynomialRegression(x_fit, y_fit, degree=max_degree)
+                except:
+                    import pdb; pdb.set_trace()
                 x_connect = np.arange(current[-1,0] + 1, next_seg[0,0])
                 # Only add as candidate if fit is good enough
                 candidates.append({
@@ -539,8 +543,10 @@ def merge_whistle_groups(whistles, max_gap_x=25, max_gap_y=25, min_fit_window = 
                         fit_window = min(min_fit_window, len(current[:overlap_start]), len(next_overlap[overlap_end:]))
                         x_fit = np.concatenate([current[:overlap_start, 0], connection[:, 0], next_overlap[overlap_end:, 0]])
                         y_fit = np.concatenate([current[:overlap_start, 1], connection[:, 1], next_overlap[overlap_end:, 1]])
-                    
-                        poly = PolynomialRegression(x_fit, y_fit, degree=max_degree)
+                        try:
+                            poly = PolynomialRegression(x_fit, y_fit, degree=max_degree)
+                        except:
+                            import pdb; pdb.set_trace()
                         candidates.append({
                             'type': 'overlap',
                             'idx': j,
@@ -881,7 +887,7 @@ def clean_whistle_ori(whistle, max_gap=25, min_segment_ratio = 0.1):
     # Sort segments by their x-range length (descending)
     segments.sort(key=lambda s: s[-1, 0] - s[0, 0], reverse=True)
     
-      # Determine which segments to keep (long enough compared to main segment)
+    # Determine which segments to keep (long enough compared to main segment)
     main_segment_length = segments[0][-1, 0] - segments[0][0, 0]
     min_length = main_segment_length * min_segment_ratio
     
@@ -938,7 +944,10 @@ def clean_whistle(whistle, max_gap_x=25, max_gap_y =8, recent_fit = 12):
     """
     unique_x = np.unique(whistle[:, 0])
     if len(unique_x) < 2:
-        return np.array(whistle)[None, :] 
+        if len(whistle) == 1:
+            return np.array(whistle)[None, :] 
+        else:
+            return np.mean(whistle, axis=0, keepdims=True).astype(int)[None, :]
 
     # check if all x has no neighboring multiple y values
     peaks = OrderedDict()
@@ -1239,7 +1248,7 @@ def traverse_peaks(peaks: OrderedDict, max_gap_x=25, max_gap_y =8, recent_fit = 
     return result_whistles
 
 
-def mask_to_whistle(mask, max_gap=25, min_segment_ratio = 0.1):
+def mask_to_whistle(mask):
     """convert the instance mask to whistle contour, use skeleton methods
     
     Args
