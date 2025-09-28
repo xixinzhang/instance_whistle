@@ -69,7 +69,7 @@ if __name__ == "__main__":
 
     count, length, stems = get_wav_stats_and_stems(args.folder, args.exclude)
     print(f"Found {count} .wav files")
-    print(f"Total length: {length:.2f} seconds ({length/60:.2f} minutes)")
+    print(f"Total length: {length} seconds ({length/60:.2f} minutes)")
 
     if args.count_annotations:
         print("\nTotal annotation count for included .wav stems:")

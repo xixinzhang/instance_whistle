@@ -1,7 +1,7 @@
 auto_scale_lr = dict(enable=False, base_batch_size=16)
 backend_args = None
 default_scope = 'mmdet'
-work_dir = f'./work_dirs/mask2former_swin-t-p4-w7-224_8xb2-lsj-50e_whistle_noresize'
+work_dir = f'./work_dirs/mask2former_swin-t-p4-w7-224_8xb2-lsj-50e_whistle_noresize_cls11_median_inverse'
 
 
 default_hooks = dict(
@@ -125,36 +125,7 @@ model = dict(
         type='SwinTransformer',
         window_size=7,
         with_cp=False),
-    data_preprocessor=dict(
-        batch_augments=[
-            dict(
-                img_pad_value=0,
-                mask_pad_value=0,
-                pad_mask=True,
-                pad_seg=False,
-                size=(
-                    769,
-                    1500,
-                ),
-                type='BatchFixedSizePad'),
-        ],
-        bgr_to_rgb=True,
-        mask_pad_value=0,
-        mean=[
-            123.675,
-            116.28,
-            103.53,
-        ],
-        pad_mask=True,
-        pad_seg=False,
-        pad_size_divisor=32,
-        seg_pad_value=255,
-        std=[
-            58.395,
-            57.12,
-            57.375,
-        ],
-        type='DetDataPreprocessor'),
+    data_preprocessor=data_preprocessor,
     init_cfg=None,
     panoptic_fusion_head=dict(
         init_cfg=None,
@@ -174,7 +145,7 @@ model = dict(
         loss_cls=dict(
             class_weight=[
                 1.0,
-                0.1,
+                1.0,
             ],
             loss_weight=2.0,
             reduction='mean',
@@ -356,7 +327,7 @@ test_dataloader = dict(
         ann_file='labels.json',
         backend_args=None,
         data_prefix=dict(img='data/'),
-        data_root = data_root+ '/test',
+        data_root = data_root+ '/train_refined',
         pipeline=[
             dict(backend_args=None, to_float32=True, type='LoadImageFromFile'),
             dict(type='LoadAnnotations', with_bbox=True, with_mask=True),
@@ -377,7 +348,7 @@ test_dataloader = dict(
     persistent_workers=True,
     sampler=dict(shuffle=False, type='DefaultSampler'))
 test_evaluator = dict(
-    ann_file=data_root + '/test/labels.json',
+    ann_file=data_root + '/train_refined/labels.json',
     backend_args=None,
     format_only=False,
     metric=[
@@ -420,8 +391,9 @@ train_dataloader = dict(
         },
         ann_file='labels.json',
         backend_args=None,
-        data_prefix=dict(img='data/'),
-        data_root = data_root+ '/train',
+        data_prefix=dict(
+            img='data/'),
+        data_root = data_root+ '/test_refined',
         filter_cfg=dict(filter_empty_gt=True, min_size=32),
         pipeline=[
             dict(backend_args=None, to_float32=True, type='LoadImageFromFile'),
@@ -465,7 +437,7 @@ val_dataloader = dict(
         ann_file='labels.json',
         backend_args=None,
         data_prefix=dict(img='data/'),
-        data_root = data_root+ '/val2',
+        data_root = data_root+ '/040000',
         pipeline=[
             dict(backend_args=None, to_float32=True, type='LoadImageFromFile'),
             dict(type='LoadAnnotations', with_bbox=True, with_mask=True),
@@ -486,7 +458,7 @@ val_dataloader = dict(
     persistent_workers=True,
     sampler=dict(shuffle=False, type='DefaultSampler'))
 val_evaluator = dict(
-    ann_file=data_root+ '/val2/labels.json',
+    ann_file=data_root+ '/040000/labels.json',
     backend_args=None,
     format_only=False,
     metric=[

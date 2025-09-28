@@ -277,8 +277,8 @@ class WhistleMetric2(BaseMetric):
         stems = yaml.safe_load(open('../data/cross/meta.yaml'))
         stems = stems['test']
 
-        # DEBUG: 
-        # stems = ['Qx-Dd-SCI0608-Ziph-060816-151032']
+        # DEBUG/VAl: 
+        stems = ['palmyra092007FS192-070928-040000']
 
 
         # add img_id in same audio file
@@ -334,7 +334,7 @@ class WhistleMetric2(BaseMetric):
             spect_snr = np.flipud(spect_snr) # flip frequency axis, low freq at the bottom
             tonals_snr = [spect_snr[w[:, 1].astype(int),w[:, 0].astype(int)] for w in dt_whistles]
             dt_whistles_tf = [pix_to_tf(whistle, height=freq_height) for whistle in dt_whistles]
-            tonal_save(stem, dt_whistles_tf, tonals_snr, model_name='mask2former')
+            # tonal_save(stem, dt_whistles_tf, tonals_snr, model_name='mask2former')
 
             def unique_pix(traj):
                 unique_x = np.unique(traj[:, 0])
@@ -1140,7 +1140,8 @@ def traverse_peaks(peaks: OrderedDict, max_gap_x=25, max_gap_y =8, recent_fit = 
     xs = list(peaks.keys())
     dis = np.abs(np.diff(xs))
     # remove the outliers at the beginning
-    start_idx = np.nonzero(dis < max_gap_x)[0][0] if len(dis) > 1 else 0
+    indices = np.nonzero(dis < max_gap_x)[0]
+    start_idx =  indices[0] if len(indices) > 0 else 0
     for i, (x, ys) in enumerate(peaks.items()):
         if i < start_idx:
             continue
@@ -1375,6 +1376,8 @@ def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, vali
     all_deviation = []
     all_covered = []
     all_dura = []
+    valid_covered = []
+    valid_dura = []
 
     if valid_gt or debug:
         waveform, sample_rate = load_wave_file(f'../data/cross/audio/{img_id}.wav')
@@ -1449,18 +1452,20 @@ def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, vali
         
         if matched:
             gt_matched_all.append(gt_idx)
+            gt_deviation = np.mean(deviations)
+            all_deviation.append(gt_deviation)
+            all_covered.append(covered)
             if valid:
                 gt_matched_valid.append(gt_idx)
+                valid_covered.append(covered)
         else:
             gt_missed_all.append(gt_idx)
             if valid:
                 gt_missed_valid.append(gt_idx)
 
-        if matched:
-            gt_deviation = np.mean(deviations)
-            all_deviation.append(gt_deviation)
-            all_covered.append(covered)
         all_dura.append(gt_dura) # move out from matched
+        if valid:
+            valid_dura.append(gt_dura)
 
     if debug:
         freq_height = 769
@@ -1488,7 +1493,9 @@ def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, vali
         'gt_missed_valid': len(gt_missed_valid),
         'all_deviation': all_deviation,
         'all_covered': all_covered,
-        'all_dura': all_dura
+        'all_dura': all_dura,
+        'valid_covered': valid_covered,
+        'valid_dura': valid_dura
     }
     return res
 
@@ -1505,7 +1512,9 @@ def accumulate_whistle_results(img_to_whistles, valid_gt, valid_len=75,deviation
         'gt_missed_valid': 0,
         'all_deviation': [],
         'all_covered': [],
-        'all_dura': []
+        'all_dura': [],
+        'valid_covered': [],
+        'valid_dura': []
     }
     for img_id, whistles in img_to_whistles.items():
         res = compare_whistles(**whistles, valid_gt = valid_gt, valid_len = valid_len, deviation_tolerence = deviation_tolerence, debug=debug)
@@ -1521,6 +1530,8 @@ def accumulate_whistle_results(img_to_whistles, valid_gt, valid_len=75,deviation
         accumulated_res['all_deviation'].extend(res['all_deviation'])
         accumulated_res['all_covered'].extend(res['all_covered'])
         accumulated_res['all_dura'].extend(res['all_dura'])
+        accumulated_res['valid_covered'].extend(res['valid_covered'])
+        accumulated_res['valid_dura'].extend(res['valid_dura'])
     return accumulated_res
 
 def summarize_whistle_results(accumulated_res):
@@ -1544,7 +1555,10 @@ def summarize_whistle_results(accumulated_res):
     accumulated_res['all_deviation'] = np.mean(accumulated_res['all_deviation']).item()
     accumulated_res['all_covered'] = np.sum(accumulated_res['all_covered']).item()
     accumulated_res['all_dura'] = np.sum(accumulated_res['all_dura']).item()
+    accumulated_res['valid_covered'] = np.sum(accumulated_res['valid_covered']).item()
+    accumulated_res['valid_dura'] = np.sum(accumulated_res['valid_dura']).item()
     coverage = accumulated_res['all_covered'] / accumulated_res['all_dura'] if accumulated_res['all_dura'] > 0 else 0
+    coverage_valid = accumulated_res['valid_covered'] / accumulated_res['valid_dura'] if accumulated_res['valid_dura'] > 0 else 0
 
     summary = {
         'gt_all': gt_tp + gt_fn,
@@ -1558,8 +1572,9 @@ def summarize_whistle_results(accumulated_res):
         'dt_n':(dt_tp_valid + dt_fp),
         'precision_valid': precision_valid,
         'recall_valid': recall_valid,
+        'f1_valid': 2 * precision_valid * recall_valid / (precision_valid + recall_valid) if (precision_valid + recall_valid) > 0 else 0,
         'frag_valid': frag_valid,
-        'f1_valid': 2 * precision_valid * recall_valid / (precision_valid + recall_valid) if (precision_valid + recall_valid) > 0 else 0
+        'coverage_valid': coverage_valid,
     }
     return summary
 

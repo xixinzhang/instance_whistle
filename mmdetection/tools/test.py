@@ -142,7 +142,13 @@ def main():
             DumpDetResults(out_file_path=args.out))
 
     # start testing
+    from time import time
+    start = time()
     runner.test()
+    end = time()
+    rtf = (end - start) / 6317.98790625
+    print(f"Total time: {end - start:.2f} seconds, RTF: {rtf:.4f}")
+
 
 
 if __name__ == '__main__':

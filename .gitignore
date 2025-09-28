@@ -5,6 +5,8 @@
 mmdetection/checkpoints
 *pkl
 *.zip
+*.pdf
 __pycache__
 *.egg-info
 *.png
+*.grd
