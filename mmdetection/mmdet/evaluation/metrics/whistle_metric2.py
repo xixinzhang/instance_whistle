@@ -102,7 +102,12 @@ class WhistleMetric2(BaseMetric):
                  collect_device: str = 'cpu',
                  prefix: Optional[str] = None,
                  sort_categories: bool = False,
-                 use_mp_eval: bool = False) -> None:
+                 use_mp_eval: bool = False,
+                 val_file: Optional[Union[bool, str]] = None,
+                 save: bool = False,
+                 split: str = 'test',
+                 filter_dt: float = 0.8
+                 ) -> None:
         super().__init__(collect_device=collect_device, prefix=prefix)
         # coco evaluation metrics
         self.metrics = metric if isinstance(metric, list) else [metric]
@@ -128,6 +133,10 @@ class WhistleMetric2(BaseMetric):
         self.iou_thrs = iou_thrs
         self.metric_items = metric_items
         self.format_only = format_only
+        self.split = split
+        self.val_file = val_file
+        self.save = save
+        self.filter_dt = filter_dt
         if self.format_only:
             assert outfile_prefix is not None, 'outfile_prefix must be not'
             'None when format_only is True, otherwise the result files will'
@@ -275,10 +284,13 @@ class WhistleMetric2(BaseMetric):
         # split gt and prediction list
         _, preds = zip(*results)
         stems = yaml.safe_load(open('../data/cross/meta.yaml'))
-        stems = stems['test']
 
-        # DEBUG/VAl: 
-        stems = ['palmyra092007FS192-070928-040000']
+        assert self.split in stems.keys(), f'split {self.split} not recognized'
+        stems = stems[self.split]
+
+        # DEBUG/VAL: 
+        if self.val_file is not None or self.save:
+            stems = [self.val_file] if isinstance(self.val_file, str) else self.val_file
 
 
         # add img_id in same audio file
@@ -302,48 +314,39 @@ class WhistleMetric2(BaseMetric):
 
             # dt eval 
             img_to_frames = {img_id: start_frame for img_id, start_frame in zip(image_ids, sorted_frames)} 
-            filter_dt = 0.8
+            filter_dt = self.filter_dt
             result_whistle = self.results2whistles(preds, img_ids, filter_dt=filter_dt)  # {img_id: {id: whistle ...} }
             coco_whistles = {img_to_frames[img_id]: whistles for img_id, whistles in result_whistle.items()}  # {start_frame: {id: whistle} ...}
 
             # Merge whistles that are cut at frame boundaries
             dt_whistles = connect_whistles_at_boundaries(coco_whistles, block_size)
             
-            # Filter out whistle segments that are outside the frequency range
-            dt_whistles = cut_whistle_outrange(dt_whistles)
-            # Filter out too short whistle segments
+            # Filter out whistle segments that are outside the frequency range 
+            dt_whistles = cut_whistle_outrange(dt_whistles) # just for fair comparison; can be removed
+            # Filter out too short whistle segments(likely artifacts)
             dt_whistles = filter_whistles(dt_whistles)
 
             # apply NMS to remove overlapping whistles
             dt_whistles = whistle_nms(dt_whistles)
-
             # Merge groups of segments after NMS
             dt_whistles = merge_whistle_groups(dt_whistles)
 
-            # save the whistles to binary file
             waveform, sample_rate = load_wave_file(f'../data/cross/audio/{stem}.wav')
             spect_power_db= wave_to_spect(waveform, sample_rate)
             H, W = spect_power_db.shape[-2:]
             # clip whistles to [0, H-1][0, W-1]
             dt_whistles = [np.clip(whistle, [0, 0], [W-1, H-1]) for whistle in dt_whistles]
 
-            spect_snr = np.zeros_like(spect_power_db)
-            broadband = 0.01
-            for i in range(0, W, block_size):
-                spect_snr[:, i:i+block_size] = snr_spect(spect_power_db[:, i:i+block_size], click_thr_db=10, broadband_thr_n=broadband*H )
-            spect_snr = np.flipud(spect_snr) # flip frequency axis, low freq at the bottom
-            tonals_snr = [spect_snr[w[:, 1].astype(int),w[:, 0].astype(int)] for w in dt_whistles]
-            dt_whistles_tf = [pix_to_tf(whistle, height=freq_height) for whistle in dt_whistles]
-            # tonal_save(stem, dt_whistles_tf, tonals_snr, model_name='mask2former')
-
-            def unique_pix(traj):
-                unique_x = np.unique(traj[:, 0])
-                averaged_y = np.zeros_like(unique_x)
-                for i, x in enumerate(unique_x):
-                    y_values = traj[traj[:, 0] == x][:, 1]
-                    averaged_y[i] = int(np.round(np.mean(y_values)))
-                unique_traj = np.column_stack((unique_x, averaged_y))
-                return unique_traj
+            # save the whistles to binary file
+            if self.save:
+                spect_snr = np.zeros_like(spect_power_db)
+                broadband = 0.01
+                for i in range(0, W, block_size):
+                    spect_snr[:, i:i+block_size] = snr_spect(spect_power_db[:, i:i+block_size], click_thr_db=10, broadband_thr_n=broadband*H )
+                spect_snr = np.flipud(spect_snr) # flip frequency axis, low freq at the bottom
+                tonals_snr = [spect_snr[w[:, 1].astype(int),w[:, 0].astype(int)] for w in dt_whistles]
+                dt_whistles_tf = [pix_to_tf(whistle, height=freq_height) for whistle in dt_whistles]
+                tonal_save(stem, dt_whistles_tf, tonals_snr, model_name='mask2former')
             
             binfile = os.path.join('../data/cross/anno_refined', f'{stem}.bin')
             gt_tonals = utils.load_tonal_reader(binfile)
@@ -369,7 +372,7 @@ class WhistleMetric2(BaseMetric):
         rprint(f'gathered {sum_gts} gt whistles, {sum_dts} dt whistles within')
         eval_results = OrderedDict()
 
-        res = accumulate_whistle_results(img_to_whistles, debug=True, valid_gt=True, valid_len = 75, deviation_tolerence= 350/125)
+        res = accumulate_whistle_results(img_to_whistles, debug=self.save, valid_gt=True, valid_len = 75, deviation_tolerence= 350/125)
         summary = summarize_whistle_results(res)
         rprint(summary)
 
@@ -434,6 +437,15 @@ def connect_whistles_at_boundaries(coco_whistles, block_size=1500, freq_threshol
     # Add merged whistles to the complete list
     dt_whistles.extend(merged_whistles)
     return dt_whistles
+
+def unique_pix(traj):
+    unique_x = np.unique(traj[:, 0])
+    averaged_y = np.zeros_like(unique_x)
+    for i, x in enumerate(unique_x):
+        y_values = traj[traj[:, 0] == x][:, 1]
+        averaged_y[i] = int(np.round(np.mean(y_values)))
+    unique_traj = np.column_stack((unique_x, averaged_y))
+    return unique_traj
 
 def cut_whistle_outrange(whistles, 
                         top_cutoff = 368, # (96000-50000)/125

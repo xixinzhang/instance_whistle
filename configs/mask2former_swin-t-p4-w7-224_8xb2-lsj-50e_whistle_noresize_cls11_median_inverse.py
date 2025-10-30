@@ -352,9 +352,12 @@ test_evaluator = dict(
     backend_args=None,
     format_only=False,
     metric=[
-        # 'bbox',
         'segm',
     ],
+    save=False,
+    val_file=None,
+    split='train',
+    filter_dt=0.1,
     type='WhistleMetric2')
 test_pipeline = [
     dict(backend_args=None, to_float32=True, type='LoadImageFromFile'),
@@ -462,8 +465,11 @@ val_evaluator = dict(
     backend_args=None,
     format_only=False,
     metric=[
-        # 'bbox',
         'segm',
-    ],
+    ],    
+    save=False,
+    val_file='palmyra092007FS192-070928-040000',
+    split='train',
+    filter_dt=0.8,
     type='WhistleMetric2')
 

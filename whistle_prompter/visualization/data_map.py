@@ -6,10 +6,10 @@ import numpy as np
 
 # Data from the provided image
 species_data = {
-    'Common dolphin': {'loc': 'Southern California Bight', 'lat': 33.5, 'lon': -118.5, 'refined_whistles': 8092, 'color': '#ffd600'},      # Yellow
-    'Bottlenose dolphin': {'loc': 'Southern California Bight', 'lat': 33.5, 'lon': -118.5, 'refined_whistles': 3505, 'color': '#e53935'}, # Red
-    'Melon-headed whale': {'loc': 'Palmyra Atoll', 'lat': 5.8, 'lon': -162.1, 'refined_whistles': 5424, 'color': '#00bcd4'},              # Cyan
-    'Spinner dolphin': {'loc': 'Palmyra Atoll', 'lat': 5.8, 'lon': -162.1, 'refined_whistles': 3031, 'color': '#ff9800'},                 # Orange
+    'Common Dolphin': {'loc': 'Southern California Bight', 'lat': 33.5, 'lon': -118.5, 'refined_whistles': 8092, 'color': '#ffd600'},      # Yellow
+    'Bottlenose Dolphin': {'loc': 'Southern California Bight', 'lat': 33.5, 'lon': -118.5, 'refined_whistles': 3505, 'color': '#e53935'}, # Red
+    'Melon-headed Whale': {'loc': 'Palmyra Atoll', 'lat': 5.8, 'lon': -162.1, 'refined_whistles': 5424, 'color': '#00bcd4'},              # Cyan
+    'Spinner Dolphin': {'loc': 'Palmyra Atoll', 'lat': 5.8, 'lon': -162.1, 'refined_whistles': 3031, 'color': '#ff9800'},                 # Orange
 }
 
 # Revised marine biology landmark
@@ -60,15 +60,15 @@ ax.gridlines(draw_labels=True, xlocs=np.arange(-180, -109, 20), ylocs=np.arange(
 # Location offsets
 offsets = {
     'Southern California Bight': [(-0.5, -3.5), (-3, 0.5)],  # move circles further away
-    'Palmyra Atoll': [(-1.5, -1.5), (0.5, -1.5)]
+    'Palmyra Atoll': [(2, 2.6), (2, 0.5)]
 }
 loc_idx = {'Southern California Bight': 0, 'Palmyra Atoll': 0}
 
 # Add main location markers and labels
 ax.scatter([-118.5, -162.1], [33.5, 5.8], color='black', marker='x', s=150, zorder=4)
-scb_text = ax.text(-118.5 - 3, 33.5 - 1.5, 'Southern California Bight', horizontalalignment='center', fontsize=20, style='italic', color='white', transform=ccrs.PlateCarree(), zorder=2)
+scb_text = ax.text(-128 - 3, 33 - 1.5, 'Southern California Bight', horizontalalignment='center', fontsize=22, style='italic', color='white', transform=ccrs.PlateCarree(), zorder=2)
 scb_text.set_path_effects([path_effects.Stroke(linewidth=3, foreground='black'), path_effects.Normal()])
-pa_text = ax.text(-162.1, 5.8 + 1, 'Palmyra Atoll', horizontalalignment='center', fontsize=20, style='italic', color='white', transform=ccrs.PlateCarree(), zorder=4)
+pa_text = ax.text(-165, 3, 'Palmyra Atoll', horizontalalignment='center', fontsize=22, style='italic', color='white', transform=ccrs.PlateCarree(), zorder=4)
 pa_text.set_path_effects([path_effects.Stroke(linewidth=3, foreground='black'), path_effects.Normal()])
 
 
@@ -101,7 +101,7 @@ for species, data in species_data.items():
 
 
     # Draw line from cross to circumference of circle
-    ax.plot([cross_lon, line_end_lon], [cross_lat, line_end_lat], color='gray', linewidth=1.5, linestyle='-', transform=ccrs.PlateCarree(), zorder=2)
+    ax.plot([cross_lon, line_end_lon], [cross_lat, line_end_lat], color="#FF5900", linewidth=1.5, linestyle='-', transform=ccrs.PlateCarree(), zorder=2)
 
     # Draw circle
     ax.scatter(circle_lon, circle_lat,
@@ -118,7 +118,7 @@ for species, data in species_data.items():
 
 # Add landmark labels without markers
 for landmark, coords in landmarks.items():
-    lm_text = ax.text(coords['lon'], coords['lat'] + 2, landmark, horizontalalignment='center', fontsize=20, style='italic', color='white', transform=ccrs.PlateCarree(), zorder=4)
+    lm_text = ax.text(coords['lon']+8, coords['lat']-2 , landmark, horizontalalignment='center', fontsize=22, style='italic', color='white', transform=ccrs.PlateCarree(), zorder=4)
     lm_text.set_path_effects([path_effects.Stroke(linewidth=3, foreground='black'), path_effects.Normal()])
 
 # Create a custom legend for bubble sizes
@@ -160,12 +160,12 @@ ax.legend(
 )
 
 # Add the 'North Pacific Ocean' label with a higher zorder
-ocean_text = ax.text(-161, 36, 'North Pacific Ocean', horizontalalignment='left', fontsize=26, color='white', transform=ccrs.PlateCarree(), style='italic', fontweight='bold', alpha=0.9, zorder=4)
+ocean_text = ax.text(-161, 36, 'North Pacific Ocean', horizontalalignment='left', fontsize=30, color='white', transform=ccrs.PlateCarree(), style='italic', fontweight='bold', alpha=0.9, zorder=4)
 import matplotlib.patheffects as path_effects
 ocean_text.set_path_effects([path_effects.Stroke(linewidth=3, foreground='black'), path_effects.Normal()])
 
 # Finalize the plot
 # ax.set_title('Refined Whistle Count by Species and Location', fontsize=16)
 plt.tight_layout()
-plt.savefig('whistle_count_map.pdf', bbox_inches='tight')
+plt.savefig('whistle_count_map.png', bbox_inches='tight')
 plt.show()
