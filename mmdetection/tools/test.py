@@ -13,6 +13,7 @@ from mmdet.engine.hooks.utils import trigger_visualization_hook
 from mmdet.evaluation import DumpDetResults
 from mmdet.registry import RUNNERS
 from mmdet.utils import setup_cache_size_limit_of_dynamo
+from time import time
 
 
 # TODO: support fuse_conv_bn and format_only
@@ -57,6 +58,39 @@ def parse_args():
     # will pass the `--local-rank` parameter to `tools/train.py` instead
     # of `--local_rank`.
     parser.add_argument('--local_rank', '--local-rank', type=int, default=0)
+    parser.add_argument(
+        '--data-dir',
+        type=str,
+        default='coco',
+        help='Path to the dataset directory.')
+    parser.add_argument(
+        '--val-file',
+        type=str,
+        help='validation recording name.')
+    parser.add_argument(
+        '--save',
+        action='store_true',
+        help='Whether to save the whistle annotations.')
+    parser.add_argument(
+        '--split',
+        type=str,
+        default='test',
+        help='dataset split to evaluate.')
+    parser.add_argument(
+        '--filter-dt',
+        type=float,
+        default=0.8,
+        help='Minimum score for detected whistles.')
+    parser.add_argument(
+        '--model-name',
+        type=str,
+        default='mask2former_swin',
+        help='Model name for saving results.')
+    parser.add_argument(
+        '--duration',
+        type=float,
+        default=None,
+        help='Duration of the audio clip for RTF calculation.')
     args = parser.parse_args()
     if 'LOCAL_RANK' not in os.environ:
         os.environ['LOCAL_RANK'] = str(args.local_rank)
@@ -141,13 +175,25 @@ def main():
         runner.test_evaluator.metrics.append(
             DumpDetResults(out_file_path=args.out))
 
+    if args.save or args.val_file is not None:
+        assert args.model_name is not None, 'Please specify the model name for saving results.'
+
+    runner.test_evaluator.metrics[0].data_dir = args.data_dir
+    runner.test_evaluator.metrics[0].val_file = args.val_file
+    runner.test_evaluator.metrics[0].save = args.save
+    runner.test_evaluator.metrics[0].split = args.split
+    runner.test_evaluator.metrics[0].filter_dt = args.filter_dt
+    runner.test_evaluator.metrics[0].model_name = args.model_name
+
     # start testing
-    from time import time
-    start = time()
+    if args.duration:
+        start = time()
     runner.test()
-    end = time()
-    rtf = (end - start) / 6317.98790625
-    print(f"Total time: {end - start:.2f} seconds, RTF: {rtf:.4f}")
+    if args.duration:
+        from rich import print as rprint
+        end = time()
+        rtf = (end - start) / args.duration
+        rprint(f"Total time: {end - start:.2f} seconds, RTF: {rtf:.4f}")
 
 
 

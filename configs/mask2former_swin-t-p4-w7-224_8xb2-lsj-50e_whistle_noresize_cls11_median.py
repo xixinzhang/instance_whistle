@@ -30,7 +30,7 @@ vis_backends = [
 
 visualizer = dict(
     name='visualizer',
-    type='DetLocalVisualizer',
+    type='WhistleVisualizer',
     vis_backends=vis_backends)
 log_processor = dict(by_epoch=False, type='LogProcessor', window_size=50)
 
@@ -66,7 +66,7 @@ data_preprocessor = dict(
     std=[58.395, 57.12, 57.375],
     type='DetDataPreprocessor')
 
-data_root = '../data/cross/coco'
+data_root = '../data/coco_refined'
 dataset_type = 'CocoDataset'
 depths = [
     2,
@@ -327,7 +327,7 @@ test_dataloader = dict(
         ann_file='labels.json',
         backend_args=None,
         data_prefix=dict(img='data/'),
-        data_root = data_root+ '/test_refined',
+        data_root = data_root+ '/test',
         pipeline=[
             dict(backend_args=None, to_float32=True, type='LoadImageFromFile'),
             dict(type='LoadAnnotations', with_bbox=True, with_mask=True),
@@ -348,11 +348,10 @@ test_dataloader = dict(
     persistent_workers=True,
     sampler=dict(shuffle=False, type='DefaultSampler'))
 test_evaluator = dict(
-    ann_file=data_root + '/test_refined/labels.json',
+    ann_file=data_root + '/test/labels.json',
     backend_args=None,
     format_only=False,
     metric=[
-        # 'bbox',
         'segm',
     ],
     type='WhistleMetric2')
@@ -393,7 +392,7 @@ train_dataloader = dict(
         backend_args=None,
         data_prefix=dict(
             img='data/'),
-        data_root = data_root+ '/train_refined',
+        data_root = data_root+ '/train',
         filter_cfg=dict(filter_empty_gt=True, min_size=32),
         pipeline=[
             dict(backend_args=None, to_float32=True, type='LoadImageFromFile'),
@@ -462,7 +461,6 @@ val_evaluator = dict(
     backend_args=None,
     format_only=False,
     metric=[
-        # 'bbox',
         'segm',
     ],
     type='WhistleMetric2')

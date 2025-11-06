@@ -6,7 +6,6 @@ import argparse
 from whistle_prompter.utils.annotation import load_tonal_reader
 
 
-
 def get_wav_stats_and_stems(root_folder, exclude_stems=None):
     total_length = 0.0
     wav_count = 0

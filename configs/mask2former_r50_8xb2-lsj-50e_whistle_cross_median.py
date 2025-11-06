@@ -57,7 +57,7 @@ data_preprocessor = dict(
         57.375,
     ],
     type='DetDataPreprocessor')
-data_root = '../data/cross/coco'
+data_root = '../data/coco_refined'
 dataset_type = 'CocoDataset'
 dynamic_intervals = [
     (
@@ -283,7 +283,7 @@ test_dataloader = dict(
         ann_file='labels.json',
         backend_args=None,
         data_prefix=dict(img='data/'),
-        data_root = data_root+ '/test_refined',
+        data_root = data_root+ '/test',
         pipeline=[
             dict(backend_args=None, to_float32=True, type='LoadImageFromFile'),
             dict(keep_ratio=True, scale=(
@@ -308,7 +308,7 @@ test_dataloader = dict(
     persistent_workers=True,
     sampler=dict(shuffle=False, type='DefaultSampler'))
 test_evaluator = dict(
-    ann_file=data_root + '/test_refined/labels.json',
+    ann_file=data_root + '/test/labels.json',
     backend_args=None,
     format_only=False,
     metric=[
@@ -390,7 +390,7 @@ train_dataloader = dict(
         backend_args=None,
         data_prefix=dict(
             img='data/', ),
-        data_root = data_root+ '/train_refined',
+        data_root = data_root+ '/train',
         filter_cfg=dict(filter_empty_gt=True, min_size=32),
         pipeline= train_pipeline,
         type='CocoDataset'),
@@ -448,6 +448,6 @@ vis_backends = [
 ]
 visualizer = dict(
     name='visualizer',
-    type='DetLocalVisualizer',
+    type='WhistleVisualizer',
     vis_backends= vis_backends,)
 work_dir = './work_dirs/mask2former_r50_8xb2-lsj-50e_whistle_cross_median'

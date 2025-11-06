@@ -141,6 +141,12 @@ def parse_args():
         'interest to the user. -1 indicates that no area is of interest, '
         'None indicates ignoring this parameter. '
         'The two-dimensional array represents the start and end positions.')
+    parser.add_argument(
+        '--model-name',
+        type=str,
+        default=None,
+        help='Optional name for the model, used for distinguishing '
+        'different model results.')
 
     call_args = vars(parser.parse_args())
 

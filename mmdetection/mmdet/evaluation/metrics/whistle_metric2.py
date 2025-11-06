@@ -106,7 +106,9 @@ class WhistleMetric2(BaseMetric):
                  val_file: Optional[Union[bool, str]] = None,
                  save: bool = False,
                  split: str = 'test',
-                 filter_dt: float = 0.8
+                 filter_dt: float = 0.8,
+                 data_dir: str = None,
+                 model_name: str = None
                  ) -> None:
         super().__init__(collect_device=collect_device, prefix=prefix)
         # coco evaluation metrics
@@ -137,6 +139,8 @@ class WhistleMetric2(BaseMetric):
         self.val_file = val_file
         self.save = save
         self.filter_dt = filter_dt
+        self.data_dir = data_dir
+        self.model_name = model_name
         if self.format_only:
             assert outfile_prefix is not None, 'outfile_prefix must be not'
             'None when format_only is True, otherwise the result files will'
@@ -203,7 +207,8 @@ class WhistleMetric2(BaseMetric):
         results_dict = defaultdict(dict)
 
         w_id = 0
-        for idx, result in enumerate(tqdm(results, desc='Convert dt to whistle')):
+        pbar = tqdm(total=len(image_ids), desc='Convert dt to whistle')
+        for idx, result in enumerate(results):
             image_id = result.get('img_id', idx)
             if image_id not in image_ids:
                 continue
@@ -224,7 +229,8 @@ class WhistleMetric2(BaseMetric):
                     for w in whistle:
                         results_dict[image_id][w_id] = w
                         w_id += 1
-
+            pbar.update(1)
+        pbar.close()
         return results_dict
 
     # TODO: data_batch is no longer needed, consider adjusting the
@@ -283,13 +289,13 @@ class WhistleMetric2(BaseMetric):
 
         # split gt and prediction list
         _, preds = zip(*results)
-        stems = yaml.safe_load(open('../data/cross/meta.yaml'))
+        stems = yaml.safe_load(open(f'{self.data_dir}/meta.yaml'))
 
         assert self.split in stems.keys(), f'split {self.split} not recognized'
         stems = stems[self.split]
 
         # DEBUG/VAL: 
-        if self.val_file is not None or self.save:
+        if self.val_file is not None:
             stems = [self.val_file] if isinstance(self.val_file, str) else self.val_file
 
 
@@ -327,11 +333,11 @@ class WhistleMetric2(BaseMetric):
             dt_whistles = filter_whistles(dt_whistles)
 
             # apply NMS to remove overlapping whistles
-            dt_whistles = whistle_nms(dt_whistles)
+            # dt_whistles = whistle_nms(dt_whistles)
             # Merge groups of segments after NMS
             dt_whistles = merge_whistle_groups(dt_whistles)
 
-            waveform, sample_rate = load_wave_file(f'../data/cross/audio/{stem}.wav')
+            waveform, sample_rate = load_wave_file(f'{self.data_dir}/audio/{stem}.wav')
             spect_power_db= wave_to_spect(waveform, sample_rate)
             H, W = spect_power_db.shape[-2:]
             # clip whistles to [0, H-1][0, W-1]
@@ -346,9 +352,9 @@ class WhistleMetric2(BaseMetric):
                 spect_snr = np.flipud(spect_snr) # flip frequency axis, low freq at the bottom
                 tonals_snr = [spect_snr[w[:, 1].astype(int),w[:, 0].astype(int)] for w in dt_whistles]
                 dt_whistles_tf = [pix_to_tf(whistle, height=freq_height) for whistle in dt_whistles]
-                tonal_save(stem, dt_whistles_tf, tonals_snr, model_name='mask2former')
-            
-            binfile = os.path.join('../data/cross/anno_refined', f'{stem}.bin')
+                tonal_save(stem, dt_whistles_tf, tonals_snr, model_name=self.model_name)
+
+            binfile = os.path.join(f'{self.data_dir}/anno_refined', f'{stem}.bin')
             gt_tonals = utils.load_tonal_reader(binfile)
 
             gt_whistles = []
@@ -369,10 +375,18 @@ class WhistleMetric2(BaseMetric):
 
         sum_gts = sum([len(whistles['gts']) for whistles in img_to_whistles.values()])
         sum_dts = sum([len(whistles['dts']) for whistles in img_to_whistles.values()])
-        rprint(f'gathered {sum_gts} gt whistles, {sum_dts} dt whistles within')
+        msg = f'gathered {sum_gts} gt whistles, {sum_dts} dt whistles within'
+        rprint(msg)
         eval_results = OrderedDict()
 
-        res = accumulate_whistle_results(img_to_whistles, debug=self.save, valid_gt=True, valid_len = 75, deviation_tolerence= 350/125)
+        res = accumulate_whistle_results(
+            img_to_whistles,
+            debug=self.save,
+            valid_gt=True,
+            valid_len=75,
+            deviation_tolerence=350/125,
+            data_dir=self.data_dir,
+            model_name=self.model_name)
         summary = summarize_whistle_results(res)
         rprint(summary)
 
@@ -1347,7 +1361,7 @@ def gather_whistles(coco_gt:COCO, coco_dt:COCO, filter_dt=0.95, valid_gt=False, 
     return img_to_whistles
 
 
-def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, valid_len = 75, deviation_tolerence = 350/125, debug=False):
+def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, valid_len = 75, deviation_tolerence = 350/125, debug=False, data_dir=None, model_name=None):
     """given whistle gt and dt in evaluation unit and get comparison results
     Args:
         gts, dts: N, 2 in format of y, x(or t, f)
@@ -1392,7 +1406,7 @@ def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, vali
     valid_dura = []
 
     if valid_gt or debug:
-        waveform, sample_rate = load_wave_file(f'../data/cross/audio/{img_id}.wav')
+        waveform, sample_rate = load_wave_file(f'{data_dir}/audio/{img_id}.wav')
         spect_power_db= wave_to_spect(waveform, sample_rate)
         H, W = spect_power_db.shape[-2:]
         spect_snr = np.zeros_like(spect_power_db)
@@ -1467,27 +1481,25 @@ def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, vali
             gt_deviation = np.mean(deviations)
             all_deviation.append(gt_deviation)
             all_covered.append(covered)
+            all_dura.append(gt_dura)
             if valid:
                 gt_matched_valid.append(gt_idx)
                 valid_covered.append(covered)
+                valid_dura.append(gt_dura)
         else:
             gt_missed_all.append(gt_idx)
             if valid:
                 gt_missed_valid.append(gt_idx)
 
-        all_dura.append(gt_dura) # move out from matched
-        if valid:
-            valid_dura.append(gt_dura)
-
     if debug:
         freq_height = 769
         dt_false_pos_tf_all = [pix_to_tf(dts[idx], height=freq_height) for idx in dt_false_pos_all]
         tonals_snr = [spect_snr[dts[idx][:, 1].astype(int),dts[idx][:, 0].astype(int)] for idx in dt_false_pos_all]
-        tonal_save(img_id, dt_false_pos_tf_all, tonals_snr, 'mask2former_swin_fp')
+        tonal_save(img_id, dt_false_pos_tf_all, tonals_snr, f'{model_name}_fp')
         dt_snrs = [np.mean(snr) for snr in tonals_snr]
 
         dt_false_neg_tf = [pix_to_tf(gts[idx], height=freq_height) for idx in gt_missed_all]
-        tonal_save(img_id, dt_false_neg_tf, model_name='mask2former_swin_fn')
+        tonal_save(img_id, dt_false_neg_tf, model_name=f'{model_name}_fn')
 
         if len(dt_snrs) > 0:
             # rprint({i+1: dt_snrs[i].item() for i in range(len(dt_snrs))})
@@ -1512,7 +1524,9 @@ def compare_whistles(gts, dts, w, img_id, boudns_gt=None, valid_gt = False, vali
     return res
 
 
-def accumulate_whistle_results(img_to_whistles, valid_gt, valid_len=75,deviation_tolerence = 350/125, debug=False):
+def accumulate_whistle_results(img_to_whistles, valid_gt, valid_len=75,
+                               deviation_tolerence = 350/125, debug=False,
+                               data_dir=None, model_name=None):
     """accumulate the whistle results for all images (segment or entire audio)"""
     accumulated_res = {
         'dt_false_pos_all': 0,
@@ -1529,7 +1543,7 @@ def accumulate_whistle_results(img_to_whistles, valid_gt, valid_len=75,deviation
         'valid_dura': []
     }
     for img_id, whistles in img_to_whistles.items():
-        res = compare_whistles(**whistles, valid_gt = valid_gt, valid_len = valid_len, deviation_tolerence = deviation_tolerence, debug=debug)
+        res = compare_whistles(**whistles, valid_gt = valid_gt, valid_len = valid_len, deviation_tolerence = deviation_tolerence, debug=debug, data_dir=data_dir, model_name=model_name)
         rprint(f'img_id: {img_id}')
         rprint(summarize_whistle_results(res))
         accumulated_res['dt_false_pos_all'] += res['dt_false_pos_all']
@@ -1565,12 +1579,12 @@ def summarize_whistle_results(accumulated_res):
     frag_valid = dt_tp_valid / gt_tp_valid if gt_tp_valid > 0 else 0
 
     accumulated_res['all_deviation'] = np.mean(accumulated_res['all_deviation']).item()
-    accumulated_res['all_covered'] = np.sum(accumulated_res['all_covered']).item()
-    accumulated_res['all_dura'] = np.sum(accumulated_res['all_dura']).item()
-    accumulated_res['valid_covered'] = np.sum(accumulated_res['valid_covered']).item()
-    accumulated_res['valid_dura'] = np.sum(accumulated_res['valid_dura']).item()
-    coverage = accumulated_res['all_covered'] / accumulated_res['all_dura'] if accumulated_res['all_dura'] > 0 else 0
-    coverage_valid = accumulated_res['valid_covered'] / accumulated_res['valid_dura'] if accumulated_res['valid_dura'] > 0 else 0
+    coverage = np.array(accumulated_res['all_covered']) / np.array(accumulated_res['all_dura'])
+    coverage_mean = np.mean(coverage).item()
+    coverage_std = np.std(coverage).item()
+    coverage_valid = np.array(accumulated_res['valid_covered']) / np.array(accumulated_res['valid_dura'])
+    coverage_valid_mean = np.mean(coverage_valid).item()
+    coverage_valid_std = np.std(coverage_valid).item()
 
     summary = {
         'gt_all': gt_tp + gt_fn,
@@ -1579,14 +1593,14 @@ def summarize_whistle_results(accumulated_res):
         'recall': recall,
         'f1': 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0,
         'frag': frag,
-        'coverage': coverage,
+        'coverage': {'mean': coverage_mean, 'std': coverage_std},
         'gt_n':(gt_tp_valid + gt_fn_valid),
         'dt_n':(dt_tp_valid + dt_fp),
         'precision_valid': precision_valid,
         'recall_valid': recall_valid,
         'f1_valid': 2 * precision_valid * recall_valid / (precision_valid + recall_valid) if (precision_valid + recall_valid) > 0 else 0,
         'frag_valid': frag_valid,
-        'coverage_valid': coverage_valid,
+        'coverage_valid': {'mean': coverage_valid_mean, 'std': coverage_valid_std}
     }
     return summary
 

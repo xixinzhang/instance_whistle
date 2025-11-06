@@ -221,38 +221,43 @@ def split_specs_dataset(
 
 if __name__ == "__main__":
     import argparse
+    import yaml
 
     parser = argparse.ArgumentParser()
+    parser.add_argument("--meta", type=str, default="data/meta_cross.yaml")
+    parser.add_argument("--anno_dir", type=str, default="anno_refined")
+    parser.add_argument("--audio", type=str, default="audio")
+    parser.add_argument("--output_dir", type=str, default="coco")
     parser.add_argument("--cmap", type=str, default=None)
     parser.add_argument("--line_width", type=float, default=3)
     parser.add_argument("--overlap", type=float, default=0)
-    parser.add_argument("--raw_spec", type=str, default="data/spec_img")
-    parser.add_argument("--output_dir", type=str, default="data/coco")
     args = parser.parse_args()
 
-    with open("data/cross/meta.yaml") as f:
-        import yaml
-
+    with open(args.meta) as f:
         meta = yaml.safe_load(f)
+    dirname = os.path.dirname(args.meta)
+    print(f"Load meta from {dirname}")
+
     test_filenames = []
     train_filenames = []
     for stem in meta["test"]:
-        test_filenames.append(f"data/cross/audio/{stem}.wav")
+        test_filenames.append(f"{dirname}/{args.audio}/{stem}.wav")
     for stem in meta["train"]:
-        train_filenames.append(f"data/cross/audio/{stem}.wav")
-    filenames = ['data/cross/audio/palmyra092007FS192-070924-205730.wav']
-    # filenames = deepcopy(train_filenames)
-    filenames = deepcopy(test_filenames)
+        train_filenames.append(f"{dirname}/{args.audio}/{stem}.wav")
 
-    segments_dict = audios_to_segments_dict(filenames)
-    print(segments_dict.keys())
-    save_specs_img(
-        segments_dict,
-        args.raw_spec,
-        filter_empty_gt=False,
-        cmap=args.cmap,
-        line_width=args.line_width,
-        anno="anno_refined",
-    )
-    # random split dataset
-    # split_specs_dataset(f"{args.raw_spec}/labels.json", f'{args.raw_spec}/data', args.output_dir)
+    for filenames, split in zip(
+        [train_filenames, test_filenames], ["train", "test"]
+    ):
+        print(f"Preparing {split} set with {len(filenames)} audio files")
+        output_dir = osp.join(dirname, args.output_dir, split)
+        os.makedirs(output_dir, exist_ok=True)
+        segments_dict = audios_to_segments_dict(filenames)
+        print(segments_dict.keys())
+        save_specs_img(
+            segments_dict,
+            output_dir,
+            filter_empty_gt=False,
+            cmap=args.cmap,
+            line_width=args.line_width,
+            anno=args.anno_dir,
+        )

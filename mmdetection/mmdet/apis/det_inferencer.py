@@ -317,6 +317,7 @@ class DetInferencer(BaseInferencer):
             custom_entities: bool = False,
             # by Grounding DINO
             tokens_positive: Optional[Union[int, list]] = None,
+            model_name: Optional[str] = None,
             **kwargs) -> dict:
         """Call the inferencer.
 
@@ -355,6 +356,7 @@ class DetInferencer(BaseInferencer):
         Returns:
             dict: Inference and visualization results.
         """
+        self.cfg.model_name = model_name if model_name is not None else ""
         (
             preprocess_kwargs,
             forward_kwargs,
@@ -485,6 +487,8 @@ class DetInferencer(BaseInferencer):
                 raise ValueError('Unsupported input type: '
                                  f'{type(single_input)}')
 
+            if self.cfg.model_name != "":
+                img_name = f"{img_name.split('.')[0]}_{self.cfg.model_name}.{img_name.split('.')[-1]}"
             out_file = osp.join(img_out_dir, 'vis',
                                 img_name) if img_out_dir != '' else None
 

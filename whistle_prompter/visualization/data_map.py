@@ -5,12 +5,13 @@ from cartopy.feature import COASTLINE, LAND, OCEAN, BORDERS, STATES
 import numpy as np
 
 # Data from the provided image
-species_data = {
-    'Common Dolphin': {'loc': 'Southern California Bight', 'lat': 33.5, 'lon': -118.5, 'refined_whistles': 8092, 'color': '#ffd600'},      # Yellow
-    'Bottlenose Dolphin': {'loc': 'Southern California Bight', 'lat': 33.5, 'lon': -118.5, 'refined_whistles': 3505, 'color': '#e53935'}, # Red
-    'Melon-headed Whale': {'loc': 'Palmyra Atoll', 'lat': 5.8, 'lon': -162.1, 'refined_whistles': 5424, 'color': '#00bcd4'},              # Cyan
-    'Spinner Dolphin': {'loc': 'Palmyra Atoll', 'lat': 5.8, 'lon': -162.1, 'refined_whistles': 3031, 'color': '#ff9800'},                 # Orange
-}
+species_data = [
+    {'species': 'Common Dolphin', 'loc': 'Southern California Bight', 'lat': 33.5, 'lon': -118.5, 'refined_whistles': 8092, 'color': '#ffd600'},      # Yellow
+    {'species': 'Bottlenose Dolphin', 'loc': 'Southern California Bight', 'lat': 33.5, 'lon': -118.5, 'refined_whistles': 2253, 'color': '#e53935'}, # Red
+    {'species': 'Bottlenose Dolphin', 'loc': 'Palmyra Atoll', 'lat': 5.8, 'lon': -162.1, 'refined_whistles': 1252, 'color': '#e53935'},               # Red
+    {'species': 'Melon-headed Whale', 'loc': 'Palmyra Atoll', 'lat': 5.8, 'lon': -162.1, 'refined_whistles': 5424, 'color': '#00bcd4'},               # Cyan
+    {'species': 'Spinner Dolphin', 'loc': 'Palmyra Atoll', 'lat': 5.8, 'lon': -162.1, 'refined_whistles': 3031, 'color': '#ff9800'},                  # Orange
+]
 
 # Revised marine biology landmark
 landmarks = {
@@ -18,7 +19,7 @@ landmarks = {
 }
 
 # Use refined_whistles for bubble size
-all_whistles = [data['refined_whistles'] for data in species_data.values()]
+all_whistles = [data['refined_whistles'] for data in species_data]
 max_whistles = max(all_whistles)
 min_whistles = min(all_whistles)
 size_min = 100
@@ -60,7 +61,7 @@ ax.gridlines(draw_labels=True, xlocs=np.arange(-180, -109, 20), ylocs=np.arange(
 # Location offsets
 offsets = {
     'Southern California Bight': [(-0.5, -3.5), (-3, 0.5)],  # move circles further away
-    'Palmyra Atoll': [(2, 2.6), (2, 0.5)]
+    'Palmyra Atoll': [(2.8, -0.5), (2, 3.5), (2.5, 1)]
 }
 loc_idx = {'Southern California Bight': 0, 'Palmyra Atoll': 0}
 
@@ -73,7 +74,9 @@ pa_text.set_path_effects([path_effects.Stroke(linewidth=3, foreground='black'), 
 
 
 # Plot each species as a bubble
-for species, data in species_data.items():
+# Plot each species as a bubble
+for data in species_data:
+    species = data['species']
     loc = data['loc']
     idx = loc_idx[loc]
     offset_lon, offset_lat = offsets[loc][idx]
@@ -87,9 +90,7 @@ for species, data in species_data.items():
     bubble_size = size_min + (data['refined_whistles'] - min_whistles) / (max_whistles - min_whistles) * (size_max - size_min)
     # Calculate radius in degrees (approximate)
     # s in points^2, so radius in points: r = sqrt(s/pi)
-    import matplotlib.transforms as mtransforms
     radius = np.sqrt(bubble_size/np.pi)/15
-
 
     # Direction vector from cross to circle
     dx = circle_lon - cross_lon
@@ -98,7 +99,6 @@ for species, data in species_data.items():
     # The line should start at the cross and end at the circle's edge
     line_end_lon = cross_lon + dx * ((dist - radius) / dist)
     line_end_lat = cross_lat + dy * ((dist - radius) / dist)
-
 
     # Draw line from cross to circumference of circle
     ax.plot([cross_lon, line_end_lon], [cross_lat, line_end_lat], color="#FF5900", linewidth=1.5, linestyle='-', transform=ccrs.PlateCarree(), zorder=2)
@@ -129,8 +129,12 @@ for size, label in zip(legend_sizes, legend_whistles):
     legend_handles_size.append(ax.scatter([], [], s=size, c='gray', alpha=0.7, edgecolors='black', label=f'{label} whistles'))
 
 # Create a separate legend for species color
-legend_handles_color = [plt.Rectangle((0,0),1,1, color=species_data[s]['color'], ec="k") for s in species_data]
-legend_labels_color = list(species_data.keys())
+legend_color_map = {}
+for entry in species_data:
+    legend_color_map.setdefault(entry['species'], entry['color'])
+
+legend_handles_color = [plt.Rectangle((0,0),1,1, color=color, ec="k") for color in legend_color_map.values()]
+legend_labels_color = list(legend_color_map.keys())
 
 # Place the legends
 first_legend = ax.legend(
@@ -149,7 +153,7 @@ ax.add_artist(first_legend)
 ax.legend(
     handles=legend_handles_size,
     labels=[f'{w} whistles' for w in legend_whistles],
-    title='# of Refined Whistles',
+    title='Number of whistles',
     loc='lower right',
     frameon=True,
     edgecolor='black',
