@@ -10,3 +10,4 @@ __pycache__
 *.egg-info
 *.png
 *.grd
+whistle_prompter/visualization/experiment_results_full.json

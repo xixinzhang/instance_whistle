@@ -66,7 +66,7 @@ offsets = {
 loc_idx = {'Southern California Bight': 0, 'Palmyra Atoll': 0}
 
 # Add main location markers and labels
-ax.scatter([-118.5, -162.1], [33.5, 5.8], color='black', marker='x', s=150, zorder=4)
+ax.scatter([-118.5, -162.1], [33.5, 5.8], color='black', marker='x', s=250, zorder=4,linewidths=3)
 scb_text = ax.text(-128 - 3, 33 - 1.5, 'Southern California Bight', horizontalalignment='center', fontsize=22, style='italic', color='white', transform=ccrs.PlateCarree(), zorder=2)
 scb_text.set_path_effects([path_effects.Stroke(linewidth=3, foreground='black'), path_effects.Normal()])
 pa_text = ax.text(-165, 3, 'Palmyra Atoll', horizontalalignment='center', fontsize=22, style='italic', color='white', transform=ccrs.PlateCarree(), zorder=4)

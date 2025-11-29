@@ -165,7 +165,7 @@ refined_data_stats['total'] = {
 
 print("Refined Data Stats:")
 for category, stats in refined_data_stats.items():
-    print(f"  {category}: {stats['total']['count']} files, {stats['total']['duration']/60:.2f} minutes")
+    print(f"  {category}: {stats['total']['file']} files, {stats['total']['duration']/60:.2f} minutes")
     print(f"    Whistle Count: {stats['total']['count']}")
     print(f"    SCB - Files: {stats['SCB']['file']}, Whistle Count: {stats['SCB']['count']}, Duration: {stats['SCB']['duration']} seconds = {stats['SCB']['duration']/60:.2f} minutes")
     print(f"    Palmyra - Files: {stats['palmyra']['file']}, Whistle Count: {stats['palmyra']['count']}, Duration: {stats['palmyra']['duration']} seconds = {stats['palmyra']['duration']/60:.2f} minutes")

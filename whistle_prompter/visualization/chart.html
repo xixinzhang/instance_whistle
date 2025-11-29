@@ -189,6 +189,9 @@
                         <label style="margin-left:10px;font-size:0.9em"><input type="checkbox"
                                 id="legendToggle_regularPRChart" checked onchange="toggleLegend('regularPRChart')"> Show
                             Legend</label>
+                        <label style="margin-left:10px;font-size:0.9em"><input type="checkbox"
+                                id="isoToggle_regularPRChart" onchange="toggleIsoContours('regularPRChart')"> F1
+                            Iso-contours</label>
                     </div>
                 </div>
                 <div id="regularPRChart"></div>
@@ -207,6 +210,9 @@
                         <label style="margin-left:10px;font-size:0.9em"><input type="checkbox"
                                 id="legendToggle_validPRChart" checked onchange="toggleLegend('validPRChart')"> Show
                             Legend</label>
+                        <label style="margin-left:10px;font-size:0.9em"><input type="checkbox"
+                                id="isoToggle_validPRChart" onchange="toggleIsoContours('validPRChart')"> F1
+                            Iso-contours</label>
                     </div>
                 </div>
                 <div id="validPRChart"></div>
@@ -246,6 +252,72 @@
                     </div>
                 </div>
                 <div id="f1HistogramValid"></div>
+            </div>
+        </div>
+        <div class="charts-container" style="margin-top:40px;">
+            <div class="chart-container">
+                <div class="chart-header">
+                    <div class="chart-title">Detection Count Histogram @ 0.5 (All Detections)</div>
+                    <div class="download-buttons">
+                        <button class="download-btn"
+                            onclick="downloadChart('detectionCountAll', 'detection_count_all', 'png')">PNG</button>
+                        <button class="download-btn"
+                            onclick="downloadChart('detectionCountAll', 'detection_count_all', 'svg')">SVG</button>
+                        <button class="download-btn"
+                            onclick="downloadChart('detectionCountAll', 'detection_count_all', 'pdf')">PDF</button>
+                    </div>
+                </div>
+                <div id="detectionCountAll"></div>
+            </div>
+            <div class="chart-container">
+                <div class="chart-header">
+                    <div class="chart-title">Detection Count Histogram @ 0.5 (Detections >150ms)</div>
+                    <div class="download-buttons">
+                        <button class="download-btn"
+                            onclick="downloadChart('detectionCountValid', 'detection_count_long', 'png')">PNG</button>
+                        <button class="download-btn"
+                            onclick="downloadChart('detectionCountValid', 'detection_count_long', 'svg')">SVG</button>
+                        <button class="download-btn"
+                            onclick="downloadChart('detectionCountValid', 'detection_count_long', 'pdf')">PDF</button>
+                    </div>
+                </div>
+                <div id="detectionCountValid"></div>
+            </div>
+        </div>
+        <div class="charts-container" style="margin-top:40px;">
+            <div class="chart-container">
+                <div class="chart-header">
+                    <div class="chart-title">Time Efficiency Scatter @ 0.5 (All Detections)</div>
+                    <div class="download-buttons">
+                        <button class="download-btn"
+                            onclick="downloadChart('timeEfficiencyAll', 'time_efficiency_all', 'png')">PNG</button>
+                        <button class="download-btn"
+                            onclick="downloadChart('timeEfficiencyAll', 'time_efficiency_all', 'svg')">SVG</button>
+                        <button class="download-btn"
+                            onclick="downloadChart('timeEfficiencyAll', 'time_efficiency_all', 'pdf')">PDF</button>
+                        <label style="margin-left:10px;font-size:0.9em"><input type="checkbox"
+                                id="legendToggle_timeEfficiencyAll" checked
+                                onchange="toggleLegend('timeEfficiencyAll')"> Show Legend</label>
+                    </div>
+                </div>
+                <div id="timeEfficiencyAll"></div>
+            </div>
+            <div class="chart-container">
+                <div class="chart-header">
+                    <div class="chart-title">Time Efficiency Scatter @ 0.5 (Detections >150ms)</div>
+                    <div class="download-buttons">
+                        <button class="download-btn"
+                            onclick="downloadChart('timeEfficiencyValid', 'time_efficiency_long', 'png')">PNG</button>
+                        <button class="download-btn"
+                            onclick="downloadChart('timeEfficiencyValid', 'time_efficiency_long', 'svg')">SVG</button>
+                        <button class="download-btn"
+                            onclick="downloadChart('timeEfficiencyValid', 'time_efficiency_long', 'pdf')">PDF</button>
+                        <label style="margin-left:10px;font-size:0.9em"><input type="checkbox"
+                                id="legendToggle_timeEfficiencyValid" checked
+                                onchange="toggleLegend('timeEfficiencyValid')"> Show Legend</label>
+                    </div>
+                </div>
+                <div id="timeEfficiencyValid"></div>
             </div>
         </div>
         <div class="charts-container" style="margin-top:40px;">
@@ -332,7 +404,14 @@
             radarAll: true,
             radarValid: true,
             f1HistogramAll: true,
-            f1HistogramValid: true
+            f1HistogramValid: true,
+            timeEfficiencyAll: true,
+            timeEfficiencyValid: true
+        };
+
+        const isoContourState = {
+            regularPRChart: false,
+            validPRChart: false
         };
 
         function toggleLegend(chartId) {
@@ -340,11 +419,17 @@
             redrawChart(chartId);
         }
 
+        function toggleIsoContours(chartId) {
+            isoContourState[chartId] = document.getElementById('isoToggle_' + chartId).checked;
+            redrawChart(chartId);
+        }
+
         function redrawChart(chartId) {
+            if (!rawData) return;
             if (chartId === 'regularPRChart') {
-                createPRChart('regularPRChart', 'regular', 'All Detections', legendState.regularPRChart);
+                createPRChart('regularPRChart', 'regular', 'All Detections', legendState.regularPRChart, isoContourState.regularPRChart);
             } else if (chartId === 'validPRChart') {
-                createPRChart('validPRChart', 'valid', 'Detections >150ms', legendState.validPRChart);
+                createPRChart('validPRChart', 'valid', 'Detections >150ms', legendState.validPRChart, isoContourState.validPRChart);
             } else if (chartId === 'coverageFragScatterAll') {
                 createCoverageFragScatterAll(0.5, legendState.coverageFragScatterAll);
             } else if (chartId === 'coverageFragScatterValid') {
@@ -357,127 +442,113 @@
                 createF1Histograms(0.5, legendState.f1HistogramAll, legendState.f1HistogramValid);
             } else if (chartId === 'f1HistogramValid') {
                 createF1Histograms(0.5, legendState.f1HistogramAll, legendState.f1HistogramValid);
+            } else if (chartId === 'detectionCountAll' || chartId === 'detectionCountValid') {
+                createDetectionCountHistograms(0.5);
+            } else if (chartId === 'timeEfficiencyAll') {
+                createTimeEfficiencyScatterAll(0.5, legendState.timeEfficiencyAll);
+            } else if (chartId === 'timeEfficiencyValid') {
+                createTimeEfficiencyScatterValid(0.5, legendState.timeEfficiencyValid);
             }
         }
-    </script>
-    </div>
-    <div id="radarValid"></div>
-    </div>
-    </div>
-    </div>
-
-    <script>
         // ========================
-        // Data for precision-recall curves (all models & thresholds from 0.9->0.1)
-        // Values taken from supplied results and rounded to 4 decimals for display
+        // Data loading
         // ========================
-        const rawData = {
-            'Mask2Former (Swin-T)': {
-                0.9: { precision: 0.9309, recall: 0.7518, f1: 0.8318, coverage: 0.7304, frag: 1.0846, rtf: 0.2230, precision_valid: 0.9005, recall_valid: 0.8414, f1_valid: 0.87, coverage_valid: 0.7462, frag_valid: 1.1247 },
-                0.8: { precision: 0.9244, recall: 0.7878, f1: 0.8507, coverage: 0.7586, frag: 1.0910, rtf: 0.2317, precision_valid: 0.8906, recall_valid: 0.8708, f1_valid: 0.8806, coverage_valid: 0.7721, frag_valid: 1.1345 },
-                0.7: { precision: 0.9173, recall: 0.7987, f1: 0.8539, coverage: 0.7654, frag: 1.0932, rtf: 0.2102, precision_valid: 0.8803, recall_valid: 0.8783, f1_valid: 0.8793, coverage_valid: 0.7780, frag_valid: 1.1378 },
-                0.6: { precision: 0.9125, recall: 0.8067, f1: 0.8563, coverage: 0.7697, frag: 1.0939, rtf: 0.2122, precision_valid: 0.8732, recall_valid: 0.8832, f1_valid: 0.8781, coverage_valid: 0.7817, frag_valid: 1.1393 },
-                0.5: { precision: 0.9077, recall: 0.8124, f1: 0.8574, coverage: 0.7738, frag: 1.0959, rtf: 0.2442, precision_valid: 0.8664, recall_valid: 0.8874, f1_valid: 0.8768, coverage_valid: 0.7855, frag_valid: 1.1422 },
-                0.4: { precision: 0.9031, recall: 0.8194, f1: 0.8592, coverage: 0.7781, frag: 1.0976, rtf: 0.2625, precision_valid: 0.8599, recall_valid: 0.8924, f1_valid: 0.8758, coverage_valid: 0.7891, frag_valid: 1.1453 },
-                0.3: { precision: 0.8985, recall: 0.8261, f1: 0.8607, coverage: 0.7806, frag: 1.0980, rtf: 0.2353, precision_valid: 0.8528, recall_valid: 0.8943, f1_valid: 0.8731, coverage_valid: 0.7907, frag_valid: 1.1467 },
-                0.2: { precision: 0.8937, recall: 0.8345, f1: 0.8631, coverage: 0.7837, frag: 1.0993, rtf: 0.2126, precision_valid: 0.8457, recall_valid: 0.8978, f1_valid: 0.8710, coverage_valid: 0.7929, frag_valid: 1.1493 },
-                0.1: { precision: 0.8845, recall: 0.8452, f1: 0.8644, coverage: 0.7894, frag: 1.1010, rtf: 0.2963, precision_valid: 0.8323, recall_valid: 0.9042, f1_valid: 0.8668, coverage_valid: 0.7974, frag_valid: 1.1518 }
-            },
-            'Mask2former (Swin-T) Reversed': {
-                0.9: { gt_all: 8274, dt_all: 7146, precision: 0.9070808844108592, recall: 0.7434131012811216, f1: 0.8171321061918072, frag: 1.0538123882295563, coverage: 0.7431401461396936, rtf: 0.1470, precision_valid: 0.8540338535941965, recall_valid: 0.8617277992277992, f1_valid: 0.8578635755302256, frag_valid: 1.0879305516662, coverage_valid: 0.7688366674908266 },
-                0.8: { gt_all: 8274, dt_all: 7523, precision: 0.8921972617306926, recall: 0.7679477882523568, f1: 0.8254229518533819, frag: 1.0563424614416115, coverage: 0.7610058827332083, rtf: 0.1490, precision_valid: 0.8310768589877109, recall_valid: 0.8812741312741312, f1_valid: 0.8554397329655336, frag_valid: 1.0925520262869661, coverage_valid: 0.7856384594851583 },
-                0.7: { gt_all: 8274, dt_all: 7673, precision: 0.8867457317867848, recall: 0.7779792119893643, f1: 0.8288092855574823, frag: 1.0570141370203512, coverage: 0.7673493428228705, rtf: 0.0990, precision_valid: 0.8222176759410802, recall_valid: 0.8863416988416989, f1_valid: 0.8530763665195346, frag_valid: 1.094200925673836, coverage_valid: 0.7905797288636802 },
-                0.6: { gt_all: 8274, dt_all: 7763, precision: 0.8845807033363391, recall: 0.7837805172830553, f1: 0.8311355031162431, frag: 1.0589051657671549, coverage: 0.7719001751583043, rtf: 0.1370, precision_valid: 0.8184764991896273, recall_valid: 0.888030888030888, f1_valid: 0.8518362332923854, frag_valid: 1.0978260869565217, coverage_valid: 0.7941617493840327 },
-                0.5: { gt_all: 8274, dt_all: 7839, precision: 0.8825105243015691, recall: 0.788977519941987, f1: 0.8331270656515662, frag: 1.0597426470588236, coverage: 0.776164720634305, rtf: 0.1278, precision_valid: 0.8152827918170878, recall_valid: 0.8921332046332047, f1_valid: 0.8519784882632254, frag_valid: 1.0995401677035435, coverage_valid: 0.7980611329862021 },
-                0.4: { gt_all: 8274, dt_all: 7935, precision: 0.879773156899811, recall: 0.7952622673434856, f1: 0.8353857899096664, frag: 1.0609422492401215, coverage: 0.7806734821409331, rtf: 0.1071, precision_valid: 0.8112386228729719, recall_valid: 0.8979247104247104, f1_valid: 0.8523833753478778, frag_valid: 1.1018543402311207, coverage_valid: 0.802370136380019 },
-                0.3: { gt_all: 8274, dt_all: 8037, precision: 0.8758243125544357, recall: 0.8020304568527918, f1: 0.8373046181690468, frag: 1.0607293550331525, coverage: 0.7841725437562272, rtf: 0.1395, precision_valid: 0.804773082942097, recall_valid: 0.9013030888030888, f1_valid: 0.8503072458943312, frag_valid: 1.1014725568942436, coverage_valid: 0.8046273505472052 },
-                0.2: { gt_all: 8274, dt_all: 8156, precision: 0.8732221677292791, recall: 0.8096446700507615, f1: 0.8402324628427806, frag: 1.0631437527989251, coverage: 0.788214421674891, rtf: 0.1406, precision_valid: 0.8002318392581144, recall_valid: 0.9034749034749034, f1_valid: 0.8487251539211248, frag_valid: 1.1063034188034189, coverage_valid: 0.8076890432241137 },
-                0.1: { gt_all: 8274, dt_all: 8328, precision: 0.8686359269932757, recall: 0.8201595358955766, f1: 0.84370198096857, frag: 1.0660182729148246, coverage: 0.7942233673696599, rtf: 0.1423, precision_valid: 0.7927637810191324, recall_valid: 0.9083011583011583, f1_valid: 0.8466087847846746, frag_valid: 1.1118490967056323, coverage_valid: 0.8124753213301203 }
-            },
-            'Mask2Former (R50)': {
-                0.9: { precision: 0.9177, recall: 0.6571, f1: 0.7659, coverage: 0.6704, frag: 1.0671, rtf: 0.2716, precision_valid: 0.8865, recall_valid: 0.7751, f1_valid: 0.8271, coverage_valid: 0.6950, frag_valid: 1.0938 },
-                0.8: { precision: 0.8964, recall: 0.7242, f1: 0.8011, coverage: 0.7226, frag: 1.0816, rtf: 0.2668, precision_valid: 0.8565, recall_valid: 0.8368, f1_valid: 0.8465, coverage_valid: 0.7453, frag_valid: 1.1152 },
-                0.7: { precision: 0.8848, recall: 0.7483, f1: 0.8109, coverage: 0.7353, frag: 1.0862, rtf: 0.2060, precision_valid: 0.8397, recall_valid: 0.8526, f1_valid: 0.8461, coverage_valid: 0.7559, frag_valid: 1.1229 },
-                0.6: { precision: 0.8776, recall: 0.7658, f1: 0.8179, coverage: 0.7442, frag: 1.0894, rtf: 0.2851, precision_valid: 0.8289, recall_valid: 0.8626, f1_valid: 0.8454, coverage_valid: 0.7629, frag_valid: 1.1283 },
-                0.5: { precision: 0.8710, recall: 0.7794, f1: 0.8227, coverage: 0.7506, frag: 1.0916, rtf: 0.2818, precision_valid: 0.8189, recall_valid: 0.8700, f1_valid: 0.8437, coverage_valid: 0.7679, frag_valid: 1.1315 },
-                0.4: { precision: 0.8611, recall: 0.7877, f1: 0.8228, coverage: 0.7552, frag: 1.0930, rtf: 0.2883, precision_valid: 0.8053, recall_valid: 0.8748, f1_valid: 0.8386, coverage_valid: 0.7716, frag_valid: 1.1337 },
-                0.3: { precision: 0.8523, recall: 0.7981, f1: 0.8243, coverage: 0.7613, frag: 1.0945, rtf: 0.2278, precision_valid: 0.7931, recall_valid: 0.8813, f1_valid: 0.8349, coverage_valid: 0.7766, frag_valid: 1.1367 },
-                0.2: { precision: 0.8446, recall: 0.8083, f1: 0.8261, coverage: 0.7672, frag: 1.0968, rtf: 0.3008, precision_valid: 0.7822, recall_valid: 0.8872, f1_valid: 0.8314, coverage_valid: 0.7816, frag_valid: 1.1400 },
-                0.1: { precision: 0.8304, recall: 0.8203, f1: 0.8253, coverage: 0.7749, frag: 1.1011, rtf: 0.2965, precision_valid: 0.7631, recall_valid: 0.8945, f1_valid: 0.8236, coverage_valid: 0.7884, frag_valid: 1.1468 }
-            },
-            'Mask R-CNN': {
-                0.9: { precision: 0.9240, recall: 0.4281, f1: 0.5851, coverage: 0.3525, frag: 1.1382, rtf: 0.1372, precision_valid: 0.8979, recall_valid: 0.5073, f1_valid: 0.6483, coverage_valid: 0.3592, frag_valid: 1.2002 },
-                0.8: { precision: 0.9121, recall: 0.4961, f1: 0.6427, coverage: 0.3981, frag: 1.1422, rtf: 0.1621, precision_valid: 0.8802, recall_valid: 0.5721, f1_valid: 0.6935, coverage_valid: 0.4022, frag_valid: 1.2114 },
-                0.7: { precision: 0.9010, recall: 0.5356, f1: 0.6719, coverage: 0.4264, frag: 1.1486, rtf: 0.1665, precision_valid: 0.8651, recall_valid: 0.6123, f1_valid: 0.7171, coverage_valid: 0.4294, frag_valid: 1.2222 },
-                0.6: { precision: 0.8857, recall: 0.5705, f1: 0.6940, coverage: 0.4517, frag: 1.1544, rtf: 0.1693, precision_valid: 0.8442, recall_valid: 0.6454, f1_valid: 0.7315, coverage_valid: 0.4538, frag_valid: 1.2319 },
-                0.5: { precision: 0.8775, recall: 0.6043, f1: 0.7157, coverage: 0.4771, frag: 1.1596, rtf: 0.1735, precision_valid: 0.8330, recall_valid: 0.6788, f1_valid: 0.7480, coverage_valid: 0.4783, frag_valid: 1.2414 },
-                0.4: { precision: 0.8665, recall: 0.6384, f1: 0.7352, coverage: 0.5011, frag: 1.1634, rtf: 0.1795, precision_valid: 0.8172, recall_valid: 0.7077, f1_valid: 0.7585, coverage_valid: 0.5004, frag_valid: 1.2482 },
-                0.3: { precision: 0.8524, recall: 0.6711, f1: 0.7510, coverage: 0.5263, frag: 1.1706, rtf: 0.1840, precision_valid: 0.7983, recall_valid: 0.7373, f1_valid: 0.7666, coverage_valid: 0.5246, frag_valid: 1.2606 },
-                0.2: { precision: 0.8369, recall: 0.7059, f1: 0.7658, coverage: 0.5576, frag: 1.1792, rtf: 0.1783, precision_valid: 0.7780, recall_valid: 0.7710, f1_valid: 0.7745, coverage_valid: 0.5555, frag_valid: 1.2731 },
-                0.1: { precision: 0.8098, recall: 0.75298, f1: 0.7804, coverage: 0.5998, frag: 1.1919, rtf: 0.2068, precision_valid: 0.7427, recall_valid: 0.8127, f1_valid: 0.7761, coverage_valid: 0.5963, frag_valid: 1.2924 }
-            },
-            'Cascade Mask R-CNN': {
-                0.9: { precision: 0.9342, recall: 0.3959, f1: 0.5561, coverage: 0.32895, frag: 1.1327, rtf: 0.1599, precision_valid: 0.9109, recall_valid: 0.4677, f1_valid: 0.6180, coverage_valid: 0.3348, frag_valid: 1.1923 },
-                0.8: { precision: 0.9202, recall: 0.4824, f1: 0.6330, coverage: 0.3894, frag: 1.1390, rtf: 0.1678, precision_valid: 0.8899, recall_valid: 0.5503, f1_valid: 0.6801, coverage_valid: 0.3921, frag_valid: 1.2082 },
-                0.7: { precision: 0.9087, recall: 0.5446, f1: 0.6810, coverage: 0.4319, frag: 1.1426, rtf: 0.1315, precision_valid: 0.8730, recall_valid: 0.6097, f1_valid: 0.7180, coverage_valid: 0.4320, frag_valid: 1.2169 },
-                0.6: { precision: 0.8974, recall: 0.5903, f1: 0.7122, coverage: 0.4657, frag: 1.1449, rtf: 0.1776, precision_valid: 0.8569, recall_valid: 0.6539, f1_valid: 0.7417, coverage_valid: 0.4645, frag_valid: 1.2221 },
-                0.5: { precision: 0.8858, recall: 0.6322, f1: 0.7378, coverage: 0.4972, frag: 1.1518, rtf: 0.1810, precision_valid: 0.8407, recall_valid: 0.6933, f1_valid: 0.7599, coverage_valid: 0.4947, frag_valid: 1.2337 },
-                0.4: { precision: 0.8739, recall: 0.6713, f1: 0.7593, coverage: 0.5306, frag: 1.1576, rtf: 0.1904, precision_valid: 0.8250, recall_valid: 0.7347, f1_valid: 0.7772, coverage_valid: 0.5280, frag_valid: 1.2419 },
-                0.3: { precision: 0.8576, recall: 0.7089, f1: 0.7762, coverage: 0.5612, frag: 1.1624, rtf: 0.1479, precision_valid: 0.8030, recall_valid: 0.7710, f1_valid: 0.7867, coverage_valid: 0.5578, frag_valid: 1.2490 },
-                0.2: { precision: 0.8383, recall: 0.7525, f1: 0.7930, coverage: 0.5987, frag: 1.1686, rtf: 0.2085, precision_valid: 0.7768, recall_valid: 0.8106, f1_valid: 0.7934, coverage_valid: 0.5940, frag_valid: 1.2579 },
-                0.1: { precision: 0.8077, recall: 0.7977, f1: 0.8027, coverage: 0.6451, frag: 1.1826, rtf: 0.2200, precision_valid: 0.7379, recall_valid: 0.8513, f1_valid: 0.7905, coverage_valid: 0.6285, frag_valid: 1.2762 }
-            },
-            'SOLOv2': {
-                0.9: { precision: 0.9825, recall: 0.0784, f1: 0.1453, coverage: 0.0955, frag: 1.0636, rtf: 0.1132, precision_valid: 0.9796, recall_valid: 0.1149, f1_valid: 0.2056, coverage_valid: 0.1046, frag_valid: 1.0737 },
-                0.8: { precision: 0.9706, recall: 0.2259, f1: 0.3665, coverage: 0.2555, frag: 1.1139, rtf: 0.1446, precision_valid: 0.9643, recall_valid: 0.3126, f1_valid: 0.4721, coverage_valid: 0.2757, frag_valid: 1.1378 },
-                0.7: { precision: 0.9483, recall: 0.3489, f1: 0.5101, coverage: 0.3678, frag: 1.1360, rtf: 0.1573, precision_valid: 0.9360, recall_valid: 0.4661, f1_valid: 0.6223, coverage_valid: 0.3929, frag_valid: 1.1709 },
-                0.6: { precision: 0.9343, recall: 0.4471, f1: 0.6048, coverage: 0.4537, frag: 1.1451, rtf: 0.1664, precision_valid: 0.9180, recall_valid: 0.5859, f1_valid: 0.7152, coverage_valid: 0.4814, frag_valid: 1.1868 },
-                0.5: { precision: 0.9146, recall: 0.5334, f1: 0.6738, coverage: 0.5233, frag: 1.1582, rtf: 0.1738, precision_valid: 0.8928, recall_valid: 0.6874, f1_valid: 0.7768, coverage_valid: 0.5524, frag_valid: 1.2062 },
-                0.4: { precision: 0.8942, recall: 0.6104, f1: 0.7255, coverage: 0.5808, frag: 1.1732, rtf: 0.1417, precision_valid: 0.8666, recall_valid: 0.7725, f1_valid: 0.8168, coverage_valid: 0.6095, frag_valid: 1.2299 },
-                0.3: { precision: 0.8673, recall: 0.6646, f1: 0.7525, coverage: 0.6265, frag: 1.1959, rtf: 0.1937, precision_valid: 0.8323, recall_valid: 0.8253, f1_valid: 0.8288, coverage_valid: 0.6550, frag_valid: 1.2626 },
-                0.2: { precision: 0.8310, recall: 0.7061, f1: 0.7635, coverage: 0.6664, frag: 1.2072, rtf: 0.1570, precision_valid: 0.7875, recall_valid: 0.8685, f1_valid: 0.8260, coverage_valid: 0.6949, frag_valid: 1.2771 },
-                0.1: { precision: 0.7814, recall: 0.7394, f1: 0.7598, coverage: 0.7076, frag: 1.2189, rtf: 0.2718, precision_valid: 0.7261, recall_valid: 0.8943, f1_valid: 0.8015, coverage_valid: 0.7351, frag_valid: 1.2907 }
-            },
-            'Hybrid Task Cascade': {
-                0.9: { precision: 0.9308, recall: 0.4105, f1: 0.5698, coverage: 0.3287, frag: 1.1186, rtf: 0.1355, precision_valid: 0.9046, recall_valid: 0.4758, f1_valid: 0.6236, coverage_valid: 0.3321, frag_valid: 1.1744 },
-                0.8: { precision: 0.9106370712020755, recall: 0.49028361344537813, f1: 0.6373957336758511, coverage: 0.3856536346839532, frag: 1.1280128548473487, rtf: 0.1414, precision_valid: 0.8763955342902712, recall_valid: 0.5574365175332527, f1_valid: 0.6814394670493696, coverage_valid: 0.3873990410726904, frag_valid: 1.1919739696312364 },
-                0.7: { precision: 0.8985, recall: 0.5440, f1: 0.6777, coverage: 0.4263, frag: 1.1324, rtf: 0.1863, precision_valid: 0.8595, recall_valid: 0.6120, f1_valid: 0.7149, coverage_valid: 0.4269, frag_valid: 1.2008 },
-                0.6: { precision: 0.8874620593042261, recall: 0.585609243697479, f1: 0.7056087295982759, coverage: 0.4567847029026215, frag: 1.1363228699551569, rtf: 0.1467, precision_valid: 0.8441894294488443, recall_valid: 0.652962515114873, f1_valid: 0.7363635402376455, coverage_valid: 0.4562701114855197, frag_valid: 1.2090277777777778 },
-                0.5: { precision: 0.8764, recall: 0.6277, f1: 0.7315, coverage: 0.4902, frag: 1.1406, rtf: 0.1471, precision_valid: 0.8289, recall_valid: 0.6953, f1_valid: 0.7563, coverage_valid: 0.4894, frag_valid: 1.2157 },
-                0.4: { precision: 0.8621, recall: 0.6619, f1: 0.7488, coverage: 0.5173, frag: 1.1479, rtf: 0.2013, precision_valid: 0.8100, recall_valid: 0.7287, f1_valid: 0.7672, coverage_valid: 0.5152, frag_valid: 1.2273 },
-                0.3: { precision: 0.8472, recall: 0.6975, f1: 0.7651, coverage: 0.5477, frag: 1.1549, rtf: 0.2098, precision_valid: 0.7905, recall_valid: 0.7648, f1_valid: 0.7774, coverage_valid: 0.5455, frag_valid: 1.2375 },
-                0.2: { precision: 0.8265, recall: 0.7386, f1: 0.7801, coverage: 0.5839, frag: 1.1671, rtf: 0.2210, precision_valid: 0.7639, recall_valid: 0.8062, f1_valid: 0.7845, coverage_valid: 0.5812, frag_valid: 1.2537 },
-                0.1: { precision: 0.7942, recall: 0.7901, f1: 0.7921, coverage: 0.6323, frag: 1.1826, rtf: 0.1683, precision_valid: 0.7220, recall_valid: 0.8510, f1_valid: 0.7812, coverage_valid: 0.6285, frag_valid: 1.2762 }
-            },
-            'SAM-Whistle': {
-                0.9: { precision: 0.8844, recall: 0.5868, f1: 0.7055, coverage: 0.6785, frag: 1.1305, rtf: 0.3517, precision_valid: 0.8588, recall_valid: 0.7862, f1_valid: 0.8209, coverage_valid: 0.7292, frag_valid: 1.1597 },
-                0.8: { precision: 0.8783, recall: 0.5896, f1: 0.7056, coverage: 0.6806, frag: 1.1323, rtf: 0.3488, precision_valid: 0.8515, recall_valid: 0.7888, f1_valid: 0.8189, coverage_valid: 0.7311, frag_valid: 1.1625 },
-                0.7: { precision: 0.8747, recall: 0.5916, f1: 0.7058, coverage: 0.6836, frag: 1.1333, rtf: 0.3483, precision_valid: 0.8473, recall_valid: 0.7909, f1_valid: 0.8181, coverage_valid: 0.7343, frag_valid: 1.1641 },
-                0.6: { precision: 0.8702, recall: 0.5915, f1: 0.7043, coverage: 0.6848, frag: 1.1357, rtf: 0.3501, precision_valid: 0.8419, recall_valid: 0.7901, f1_valid: 0.8152, coverage_valid: 0.7354, frag_valid: 1.1676 },
-                0.5: { precision: 0.8672, recall: 0.5929, f1: 0.7043, coverage: 0.6854, frag: 1.1327, rtf: 0.3583, precision_valid: 0.8382, recall_valid: 0.7913, f1_valid: 0.8141, coverage_valid: 0.7358, frag_valid: 1.1637 },
-                0.4: { precision: 0.8635, recall: 0.5945, f1: 0.7042, coverage: 0.6861, frag: 1.1330, rtf: 0.3549, precision_valid: 0.8339, recall_valid: 0.7929, f1_valid: 0.8128, coverage_valid: 0.7364, frag_valid: 1.1647 },
-                0.3: { precision: 0.8613, recall: 0.5955, f1: 0.7041, coverage: 0.6863, frag: 1.1317, rtf: 0.3573, precision_valid: 0.8313, recall_valid: 0.7948, f1_valid: 0.8127, coverage_valid: 0.7367, frag_valid: 1.1633 },
-                0.2: { precision: 0.8586, recall: 0.5977, f1: 0.7048, coverage: 0.6882, frag: 1.1318, rtf: 0.3541, precision_valid: 0.8278, recall_valid: 0.7959, f1_valid: 0.8115, coverage_valid: 0.7387, frag_valid: 1.1633 },
-                0.1: { precision: 0.8555, recall: 0.5997, f1: 0.7051, coverage: 0.6899, frag: 1.1317, rtf: 0.3532, precision_valid: 0.8236, recall_valid: 0.7959, f1_valid: 0.8095, coverage_valid: 0.7394, frag_valid: 1.1625 }
-            },
-            'DeepWhistle': {
-                0.9: { precision: 0.9493, recall: 0.2835, f1: 0.4366, coverage: 0.3786, frag: 1.1670, rtf: 0.4441, precision_valid: 0.9448, recall_valid: 0.4432, f1_valid: 0.6034, coverage_valid: 0.4245, frag_valid: 1.1806 },
-                0.8: { precision: 0.8864, recall: 0.3824, f1: 0.5343, coverage: 0.4851, frag: 1.1346, rtf: 0.4536, precision_valid: 0.8713, recall_valid: 0.5635, f1_valid: 0.6844, coverage_valid: 0.5363, frag_valid: 1.1544 },
-                0.7: { precision: 0.8078, recall: 0.4349, f1: 0.5654, coverage: 0.5337, frag: 1.1226, rtf: 0.4438, precision_valid: 0.7812, recall_valid: 0.6278, f1_valid: 0.6961, coverage_valid: 0.5863, frag_valid: 1.1417 },
-                0.6: { precision: 0.7794, recall: 0.4713, f1: 0.5874, coverage: 0.5622, frag: 1.1211, rtf: 0.4534, precision_valid: 0.7460, recall_valid: 0.6656, f1_valid: 0.7035, coverage_valid: 0.6136, frag_valid: 1.1405 },
-                0.5: { precision: 0.7736, recall: 0.5019, f1: 0.6088, coverage: 0.5917, frag: 1.1203, rtf: 0.4428, precision_valid: 0.7365, recall_valid: 0.6962, f1_valid: 0.7158, coverage_valid: 0.6430, frag_valid: 1.1424 },
-                0.4: { precision: 0.7827, recall: 0.5327, f1: 0.6340, coverage: 0.6186, frag: 1.1165, rtf: 0.4428, precision_valid: 0.7442, recall_valid: 0.7270, f1_valid: 0.7355, coverage_valid: 0.6693, frag_valid: 1.1426 },
-                0.3: { precision: 0.7915, recall: 0.5559, f1: 0.6531, coverage: 0.6338, frag: 1.1208, rtf: 0.4518, precision_valid: 0.7511, recall_valid: 0.7470, f1_valid: 0.7490, coverage_valid: 0.6824, frag_valid: 1.1460 },
-                0.2: { precision: 0.7999, recall: 0.5862, f1: 0.6766, coverage: 0.6607, frag: 1.1205, rtf: 0.4505, precision_valid: 0.7586, recall_valid: 0.7773, f1_valid: 0.7678, coverage_valid: 0.7081, frag_valid: 1.1481 },
-                0.1: { precision: 0.8001, recall: 0.5741, f1: 0.6685, coverage: 0.6464, frag: 1.1333, rtf: 0.4509, precision_valid: 0.7588, recall_valid: 0.7590, f1_valid: 0.7589, coverage_valid: 0.6905, frag_valid: 1.1645 }
-            },
+        const DATA_URL = 'experiment_results_full.json';
+        let rawData = null;
 
-        };
-        
+        const DATA_ERROR_ID = 'data-load-error';
+        const DATA_LOADING_ID = 'data-loading-indicator';
+
+        function showLoadingIndicator() {
+            const container = document.querySelector('.container');
+            if (!container || document.getElementById(DATA_LOADING_ID)) return;
+            const loadingBanner = document.createElement('div');
+            loadingBanner.id = DATA_LOADING_ID;
+            loadingBanner.style.marginBottom = '20px';
+            loadingBanner.style.padding = '12px 18px';
+            loadingBanner.style.borderRadius = '12px';
+            loadingBanner.style.background = 'rgba(102, 126, 234, 0.15)';
+            loadingBanner.style.color = '#2c3e50';
+            loadingBanner.style.fontWeight = '500';
+            loadingBanner.textContent = 'Loading experiment metrics...';
+            container.insertBefore(loadingBanner, container.firstChild);
+        }
+
+        function hideLoadingIndicator() {
+            const indicator = document.getElementById(DATA_LOADING_ID);
+            if (indicator && indicator.parentNode) {
+                indicator.parentNode.removeChild(indicator);
+            }
+        }
+
+        function showDataLoadError(message) {
+            const container = document.querySelector('.container');
+            if (!container) return;
+            const existing = document.getElementById(DATA_ERROR_ID);
+            if (existing) {
+                existing.textContent = message;
+                return;
+            }
+            const errorBanner = document.createElement('div');
+            errorBanner.id = DATA_ERROR_ID;
+            errorBanner.style.marginBottom = '20px';
+            errorBanner.style.padding = '12px 18px';
+            errorBanner.style.borderRadius = '12px';
+            errorBanner.style.background = 'rgba(220, 53, 69, 0.15)';
+            errorBanner.style.color = '#842029';
+            errorBanner.style.fontWeight = '500';
+            errorBanner.textContent = message;
+            container.insertBefore(errorBanner, container.firstChild);
+        }
+
+        function extractMeanValue(metric) {
+            if (metric === null || metric === undefined) return null;
+            if (typeof metric === 'number') return metric;
+            if (typeof metric === 'object' && 'mean' in metric) return metric.mean;
+            return null;
+        }
+
+        function normalizeRawData(data) {
+            const normalized = {};
+            Object.entries(data || {}).forEach(([model, thresholds]) => {
+                normalized[model] = {};
+                Object.entries(thresholds || {}).forEach(([threshold, metrics]) => {
+                    const normalizedMetrics = { ...metrics };
+                    normalizedMetrics.coverage = extractMeanValue(metrics.coverage);
+                    normalizedMetrics.coverage_stats = metrics.coverage ?? null;
+                    normalizedMetrics.coverage_valid = extractMeanValue(metrics.coverage_valid);
+                    normalizedMetrics.coverage_valid_stats = metrics.coverage_valid ?? null;
+                    normalized[model][threshold] = normalizedMetrics;
+                });
+            });
+            return normalized;
+        }
+
+        async function loadData() {
+            try {
+                showLoadingIndicator();
+                const response = await fetch(DATA_URL);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch ${DATA_URL}: ${response.status} ${response.statusText}`);
+                }
+                const data = await response.json();
+                rawData = normalizeRawData(data);
+                hideLoadingIndicator();
+                initializeCharts();
+            } catch (error) {
+                hideLoadingIndicator();
+                console.error('Error loading experiment data:', error);
+                const extra = (typeof window !== 'undefined' && window.location && window.location.protocol === 'file:')
+                    ? ' (Tip: serve this page via a local web server to enable fetch from JSON files)'
+                    : '';
+                showDataLoadError(`Unable to load experiment_results_full.json. ${error.message}${extra}`);
+            }
+        }
+
         // Color palette for models
         const modelColors = {
             'Mask2Former (Swin-T)': '#000000', // Black
-            'Mask2former (Swin-T) Reversed': '#4B0082', // Indigo
+            'Mask2Former (Swin-T) Reversed': '#4B0082', // Indigo
             'Mask2Former (R50)': '#D55E00', // Dark Orange
             'SAM-Whistle': '#0072B2', // Blue
             'Mask R-CNN': '#CC79A7', // Magenta
@@ -487,27 +558,137 @@
             'Hybrid Task Cascade': '#56B4E9', // Light Blue
         };
 
+        const modelMarkerSymbols = {
+            'Mask2Former (Swin-T)': 'circle',
+            'Mask2Former (Swin-T) Reversed': 'square',
+            'Mask2Former (R50)': 'diamond',
+            'SAM-Whistle': 'cross',
+            'Mask R-CNN': 'x',
+            'DeepWhistle': 'triangle-up',
+            'SOLOv2': 'triangle-down',
+            'Cascade Mask R-CNN': 'triangle-left',
+            'Hybrid Task Cascade': 'triangle-right',
+        };
+
+        function getMarkerSymbol(model) {
+            return modelMarkerSymbols[model] || 'circle-open';
+        }
+
+        const ISO_F1_VALUES = [0.4, 0.5, 0.6, 0.7, 0.8, 0.9];
+
+        function generateIsoF1Traces() {
+            const isoTraces = [];
+            const isoAnnotations = [];
+            const ISO_MIN_RECALL = 0.001;
+            const ISO_EPSILON = 1e-4;
+            const ISO_STEP = 0.005;
+            const ISO_FINE_WINDOW = 0.05;
+
+            ISO_F1_VALUES.forEach(f1 => {
+                const rawPoints = [];
+                const theoreticalMinRecall = f1 / 2;
+                const startRecall = Math.max(ISO_MIN_RECALL, theoreticalMinRecall + ISO_EPSILON);
+
+                for (let recall = startRecall; recall <= 1.0 + ISO_STEP;) {
+                    const denom = (2 * recall - f1);
+                    if (denom > 0) {
+                        const precision = (f1 * recall) / denom;
+                        if (Number.isFinite(precision) && precision > 0) {
+                            rawPoints.push({ recall, precision });
+                        }
+                    }
+                    const stepSize = recall < startRecall + ISO_FINE_WINDOW ? ISO_STEP * 0.25 : ISO_STEP;
+                    recall += stepSize;
+                }
+
+                const clippedPoints = [];
+                let prev = null;
+                rawPoints.forEach(curr => {
+                    if (curr.precision <= 1) {
+                        if (prev && prev.precision > 1) {
+                            const ratio = (prev.precision - 1) / (prev.precision - curr.precision);
+                            const recallAtOne = prev.recall + (curr.recall - prev.recall) * ratio;
+                            clippedPoints.push({ recall: recallAtOne, precision: 1 });
+                        }
+                        clippedPoints.push(curr);
+                    }
+                    prev = curr;
+                });
+
+                if (clippedPoints.length > 1) {
+                    isoTraces.push({
+                        x: clippedPoints.map(p => p.recall),
+                        y: clippedPoints.map(p => p.precision),
+                        mode: 'lines',
+                        type: 'scatter',
+                        hovertemplate: `F1 = ${f1.toFixed(2)}<extra></extra>`,
+                        showlegend: false,
+                        line: {
+                            color: 'rgba(44,62,80,0.35)',
+                            width: 1,
+                            dash: 'dot'
+                        }
+                    });
+                    const labelPoint = clippedPoints[0] || clippedPoints[clippedPoints.length - 1];
+                    const labelY = Math.min(0.995, Math.max(0, labelPoint.precision - 0.005));
+                    isoAnnotations.push({
+                        xref: 'x',
+                        yref: 'y',
+                        x: labelPoint.recall,
+                        y: labelY,
+                        text: `F1=${f1.toFixed(1)}`,
+                        font: { size: 12, color: '#2c3e50' },
+                        showarrow: false,
+                        xanchor: 'center',
+                        yanchor: 'middle',
+                        align: 'center'
+                    });
+                }
+            });
+            return { traces: isoTraces, annotations: isoAnnotations };
+        }
+
+        function initializeCharts() {
+            if (!rawData) return;
+            const errorBanner = document.getElementById(DATA_ERROR_ID);
+            if (errorBanner && errorBanner.parentNode) {
+                errorBanner.parentNode.removeChild(errorBanner);
+            }
+            removeExistingSummaryTables();
+            createPRChart('regularPRChart', 'regular', 'All Detections', legendState.regularPRChart, isoContourState.regularPRChart);
+            createPRChart('validPRChart', 'valid', 'Detections >150ms', legendState.validPRChart, isoContourState.validPRChart);
+            createSummaryTables(0.5);
+            createF1Histograms(0.5, legendState.f1HistogramAll, legendState.f1HistogramValid);
+            createDetectionCountHistograms(0.5);
+            createTimeEfficiencyScatterAll(0.5, legendState.timeEfficiencyAll);
+            createTimeEfficiencyScatterValid(0.5, legendState.timeEfficiencyValid);
+            createCoverageFragScatterAll(0.5, legendState.coverageFragScatterAll);
+            createCoverageFragScatterValid(0.5, legendState.coverageFragScatterValid);
+            createRadarAll(0.5, legendState.radarAll);
+            createRadarValid(0.5, legendState.radarValid);
+        }
+
         // Convert to arrays for plotting, sorted by recall
         function prepareData(dataType) {
+            if (!rawData) return [];
             const traces = [];
 
             Object.keys(rawData).forEach(model => {
                 // Sort thresholds descending (0.9, 0.8, ..., 0.1)
                 const thresholds = Object.keys(rawData[model])
-                    .map(parseFloat)
-                    .sort((a, b) => b - a)
-                    .map(t => t.toFixed(1));
+                    .sort((a, b) => parseFloat(b) - parseFloat(a));
                 const precision_key = dataType === 'regular' ? 'precision' : 'precision_valid';
                 const recall_key = dataType === 'regular' ? 'recall' : 'recall_valid';
-                const recall_values = thresholds.map(t => rawData[model][t][recall_key]);
-                const precision_values = thresholds.map(t => rawData[model][t][precision_key]);
-                const threshold_values = thresholds.map(parseFloat);
-                // Do NOT sort by recall, just use threshold order
-                const combined = recall_values.map((r, i) => ({
-                    recall: r,
-                    precision: precision_values[i],
-                    threshold: threshold_values[i]
-                }));
+                const combined = thresholds
+                    .map(t => {
+                        const entry = rawData[model][t] || {};
+                        return {
+                            recall: entry[recall_key],
+                            precision: entry[precision_key],
+                            threshold: parseFloat(t)
+                        };
+                    })
+                    .filter(d => d.recall !== undefined && d.recall !== null && d.precision !== undefined && d.precision !== null);
                 traces.push({
                     x: combined.map(d => d.recall),
                     y: combined.map(d => d.precision),
@@ -520,10 +701,11 @@
                     },
                     marker: {
                         color: modelColors[model],
+                        symbol: getMarkerSymbol(model),
                         size: 8,
                         line: {
                             color: '#fff',
-                            width: 1
+                            width: 0.5
                         }
                     },
                     hovertemplate:
@@ -542,8 +724,11 @@
         // ========================
         // Chart creation
         // ========================
-        function createPRChart(elementId, dataType, title, showLegend = true) {
-            const traces = prepareData(dataType);
+        function createPRChart(elementId, dataType, title, showLegend = true, showIsoContours = false) {
+            if (!rawData) return;
+            const modelTraces = prepareData(dataType);
+            const isoArtifacts = showIsoContours ? generateIsoF1Traces() : { traces: [], annotations: [] };
+            const traces = showIsoContours ? isoArtifacts.traces.concat(modelTraces) : modelTraces;
             // Calculate axis ranges based on all PR data (both regular and valid)
             let all_recall = [];
             let all_precision = [];
@@ -593,7 +778,8 @@
                 paper_bgcolor: 'white',
                 margin: { l: 70, r: 30, t: 60, b: 60 },
                 hovermode: 'closest',
-                showlegend: showLegend
+                showlegend: showLegend,
+                annotations: showIsoContours ? isoArtifacts.annotations : []
             };
 
             const config = {
@@ -612,14 +798,32 @@
             Plotly.newPlot(elementId, traces, layout, config);
         }
 
-        // Create both charts
-        createPRChart('regularPRChart', 'regular', 'All Detections');
-        createPRChart('validPRChart', 'valid', 'Detections >150ms');
+        function removeExistingSummaryTables() {
+            document.querySelectorAll('.summary-table-container').forEach(node => node.remove());
+        }
+
+        function formatMetric(value) {
+            const numeric = Number(value);
+            return Number.isFinite(numeric) ? numeric.toFixed(4) : '0.0000';
+        }
+
+        function formatMeanStd(meanValue, stats) {
+            const meanNumeric = Number(meanValue);
+            const meanText = formatMetric(meanNumeric);
+            const stdCandidate = stats && typeof stats === 'object' ? Number(stats.std ?? stats.stdev ?? stats.standard_deviation) : Number.NaN;
+            if (Number.isFinite(stdCandidate)) {
+                return `${meanText} +/- ${formatMetric(stdCandidate)}`;
+            }
+            return meanText;
+        }
 
         // Create tables for threshold 0.5
         function createSummaryTables(threshold = 0.5) {
+            if (!rawData) return;
+            const charts = document.querySelector('.charts-container');
+            if (!charts || !charts.parentNode) return;
             const allTableContainer = document.createElement('div');
-            allTableContainer.className = 'chart-container';
+            allTableContainer.className = 'chart-container summary-table-container';
             allTableContainer.style.marginTop = '30px';
 
             const header = document.createElement('div');
@@ -655,24 +859,20 @@
                 const d = rawData[model][threshold];
                 if (!d) return;
 
-                // use RTF at the requested threshold (fallback to n/a if missing)
-                const meanRtf = (d && d.rtf !== undefined && d.rtf !== null) ? d.rtf : null;
-
                 row.innerHTML = `
                     <td style="padding:8px;border-bottom:1px solid #eee">${model}</td>
-                    <td style="padding:8px;border-bottom:1px solid #eee">${d.precision.toFixed(4)}</td>
-                    <td style="padding:8px;border-bottom:1px solid #eee">${d.recall.toFixed(4)}</td>
-                    <td style="padding:8px;border-bottom:1px solid #eee">${(d.f1 || 0).toFixed(4)}</td>
-                    <td style="padding:8px;border-bottom:1px solid #eee">${(d.coverage || 0).toFixed(4)}</td>
-                    <td style="padding:8px;border-bottom:1px solid #eee">${(d.frag || d.frag === 0 ? d.frag : 0).toFixed(4)}</td>
-                    <!-- <td style="padding:8px;border-bottom:1px solid #eee">${meanRtf !== null ? meanRtf.toFixed(4) : 'n/a'}</td> -->
+                    <td style="padding:8px;border-bottom:1px solid #eee">${formatMetric(d.precision)}</td>
+                    <td style="padding:8px;border-bottom:1px solid #eee">${formatMetric(d.recall)}</td>
+                    <td style="padding:8px;border-bottom:1px solid #eee">${formatMetric(d.f1)}</td>
+                    <td style="padding:8px;border-bottom:1px solid #eee">${formatMeanStd(d.coverage, d.coverage_stats)}</td>
+                    <td style="padding:8px;border-bottom:1px solid #eee">${formatMetric(d.frag)}</td>
                 `;
                 tbody.appendChild(row);
             });
 
             // valid table container
             const validTableContainer = document.createElement('div');
-            validTableContainer.className = 'chart-container';
+            validTableContainer.className = 'chart-container summary-table-container';
             validTableContainer.style.marginTop = '20px';
 
             const vheader = document.createElement('div');
@@ -706,17 +906,13 @@
                 const d = rawData[model][threshold];
                 if (!d) return;
 
-                // use RTF at the requested threshold (fallback to n/a if missing)
-                const meanRtf = (d && d.rtf !== undefined && d.rtf !== null) ? d.rtf : null;
-
                 row.innerHTML = `
                     <td style="padding:8px;border-bottom:1px solid #eee">${model}</td>
-                    <td style="padding:8px;border-bottom:1px solid #eee">${(d.precision_valid || 0).toFixed(4)}</td>
-                    <td style="padding:8px;border-bottom:1px solid #eee">${(d.recall_valid || 0).toFixed(4)}</td>
-                    <td style="padding:8px;border-bottom:1px solid #eee">${(d.f1_valid || 0).toFixed(4)}</td>
-                    <td style="padding:8px;border-bottom:1px solid #eee">${(d.coverage_valid || 0).toFixed(4)}</td>
-                    <td style="padding:8px;border-bottom:1px solid #eee">${(d.frag_valid || 0).toFixed(4)}</td>
-                    <!-- <td style="padding:8px;border-bottom:1px solid #eee">${meanRtf !== null ? meanRtf.toFixed(4) : 'n/a'}</td> -->
+                    <td style="padding:8px;border-bottom:1px solid #eee">${formatMetric(d.precision_valid)}</td>
+                    <td style="padding:8px;border-bottom:1px solid #eee">${formatMetric(d.recall_valid)}</td>
+                    <td style="padding:8px;border-bottom:1px solid #eee">${formatMetric(d.f1_valid)}</td>
+                    <td style="padding:8px;border-bottom:1px solid #eee">${formatMeanStd(d.coverage_valid, d.coverage_valid_stats)}</td>
+                    <td style="padding:8px;border-bottom:1px solid #eee">${formatMetric(d.frag_valid)}</td>
                 `;
                 vtbody.appendChild(row);
             });
@@ -725,7 +921,6 @@
             validTableContainer.appendChild(vtable);
 
             // insert tables before charts container
-            const charts = document.querySelector('.charts-container');
             charts.parentNode.insertBefore(allTableContainer, charts);
             charts.parentNode.insertBefore(validTableContainer, charts);
 
@@ -754,49 +949,56 @@
             }
 
             // After table is appended, add export buttons
-            allTableContainer.appendChild(table);
             addTableExportButtons(table, `Summary @ threshold ${threshold} (All Detections)`);
             highlightSummaryTableBestSecond(table);
-            validTableContainer.appendChild(vtable);
             addTableExportButtons(vtable, `Summary @ threshold ${threshold} (Detections >150ms)`);
             highlightSummaryTableBestSecond(vtable);
         }
 
-        // create the summary tables at threshold 0.5
-        createSummaryTables(0.5);
-
         // ========================
         // Download functionality
         // ========================
-        function downloadChart(elementId, filename, format = 'png') {
+        async function downloadChart(elementId, filename, format = 'png') {
+            if (!rawData) return;
+            const element = document.getElementById(elementId);
+            
             // Use high resolution for academic figures
             const formats = {
                 'png': { format: 'png', width: 600, height: 450, scale: 3 },
                 'svg': { format: 'svg', width: 600, height: 450 },
                 'pdf': { format: 'pdf', width: 600, height: 450 }
             };
-            // Redraw chart with current legend state before download
-            if (elementId === 'regularPRChart') {
-                createPRChart('regularPRChart', 'regular', 'All Detections', legendState.regularPRChart);
-            } else if (elementId === 'validPRChart') {
-                createPRChart('validPRChart', 'valid', 'Detections >150ms', legendState.validPRChart);
-            } else if (elementId === 'coverageFragScatterAll') {
-                createCoverageFragScatterAll(0.5, legendState.coverageFragScatterAll);
-            } else if (elementId === 'coverageFragScatterValid') {
-                createCoverageFragScatterValid(0.5, legendState.coverageFragScatterValid);
-            } else if (elementId === 'radarAll') {
-                createRadarAll(0.5, legendState.radarAll);
-            } else if (elementId === 'radarValid') {
-                createRadarValid(0.5, legendState.radarValid);
-            } else if (elementId === 'f1HistogramAll' || elementId === 'f1HistogramValid') {
-                createF1Histograms(0.5, legendState.f1HistogramAll, legendState.f1HistogramValid);
+
+            // Find traces that are hidden via legend (visible='legendonly')
+            // We want to hide their legend entry in the export (showlegend=false)
+            const hiddenIndices = [];
+            if (element && element.data) {
+                element.data.forEach((trace, i) => {
+                    if (trace.visible === 'legendonly') {
+                        hiddenIndices.push(i);
+                    }
+                });
             }
-            setTimeout(function () {
-                Plotly.downloadImage(elementId, {
+
+            // Apply change: hide legend for hidden traces
+            if (hiddenIndices.length > 0) {
+                await Plotly.restyle(elementId, { showlegend: false }, hiddenIndices);
+            }
+
+            // Download
+            try {
+                await Plotly.downloadImage(elementId, {
                     ...formats[format],
                     filename: filename
                 });
-            }, 200);
+            } catch (err) {
+                console.error("Error downloading chart:", err);
+            }
+
+            // Restore change: show legend for hidden traces (so they appear as grayed out again)
+            if (hiddenIndices.length > 0) {
+                await Plotly.restyle(elementId, { showlegend: true }, hiddenIndices);
+            }
         }
 
 
@@ -889,6 +1091,7 @@
         }
 
         function createF1Histograms(threshold = 0.5, showLegendAll = true, showLegendValid = true) {
+            if (!rawData) return;
             const models = getOrderedModels(); // enforce order
             const f1_all = models.map(m => rawData[m][threshold]?.f1 ?? null);
             const f1_valid = models.map(m => rawData[m][threshold]?.f1_valid ?? null);
@@ -928,10 +1131,297 @@
             });
         }
 
-        // Create F1 histograms
-        createF1Histograms(0.5, legendState.f1HistogramAll, legendState.f1HistogramValid);
+        function getValidDetectionCount(entry) {
+            if (!entry) return null;
+            const candidateKeys = ['dt_n', 'dt_valid', 'dt_long', 'dt_gt150', 'dt_filtered'];
+            for (const key of candidateKeys) {
+                if (entry[key] !== undefined && entry[key] !== null) {
+                    const value = Number(entry[key]);
+                    if (Number.isFinite(value)) {
+                        return value;
+                    }
+                }
+            }
+            return null;
+        }
+
+        function getValidGroundTruthCount(entry) {
+            if (!entry) return null;
+            const candidateKeys = ['gt_n', 'gt_valid', 'gt_long'];
+            for (const key of candidateKeys) {
+                if (entry[key] !== undefined && entry[key] !== null) {
+                    const value = Number(entry[key]);
+                    if (Number.isFinite(value)) {
+                        return value;
+                    }
+                }
+            }
+            return null;
+        }
+
+        function createDetectionCountHistograms(threshold = 0.5) {
+            if (!rawData) return;
+            const models = getOrderedModels();
+            const detectionsAll = models.map(model => {
+                const entry = rawData[model]?.[threshold];
+                return entry && Number.isFinite(Number(entry.dt_all)) ? Number(entry.dt_all) : 0;
+            });
+            const detectionsValid = models.map(model => {
+                const entry = rawData[model]?.[threshold];
+                const value = getValidDetectionCount(entry);
+                return Number.isFinite(Number(value)) ? Number(value) : 0;
+            });
+
+            const gtAll = (() => {
+                for (const model of models) {
+                    const value = rawData[model]?.[threshold]?.gt_all;
+                    if (Number.isFinite(Number(value))) {
+                        return Number(value);
+                    }
+                }
+                return 0;
+            })();
+
+            const gtValid = (() => {
+                for (const model of models) {
+                    const entry = rawData[model]?.[threshold];
+                    const value = getValidGroundTruthCount(entry) ?? entry?.gt_all;
+                    if (Number.isFinite(Number(value))) {
+                        return Number(value);
+                    }
+                }
+                return 0;
+            })();
+
+            const groundTruthLabel = 'Ground Truth';
+            const groundTruthColor = '#6c757d';
+
+            const allValuesForRange = [...detectionsAll, ...detectionsValid, gtAll, gtValid]
+                .map(v => Number(v))
+                .filter(v => Number.isFinite(v));
+            const globalMax = allValuesForRange.length ? Math.max(...allValuesForRange) : 0;
+            const yAxisMax = globalMax > 0 ? globalMax * 1.1 : 1;
+
+            function buildHistogram(elementId, title, categories, values, groundTruthValue, axisMax) {
+                const xValues = [...categories, groundTruthLabel];
+                const yValues = [...values.map(v => Number.isFinite(v) ? v : 0), Number.isFinite(groundTruthValue) ? groundTruthValue : 0];
+                const textValues = yValues.map(v => Number.isFinite(v) ? v.toLocaleString() : '0');
+                const colors = [...categories.map(model => modelColors[model] || '#888'), groundTruthColor];
+                Plotly.newPlot(elementId, [{
+                    x: xValues,
+                    y: yValues,
+                    type: 'bar',
+                    marker: { color: colors },
+                    text: textValues,
+                    textposition: 'auto',
+                    name: title,
+                }], {
+                    xaxis: {
+                        title: { text: 'Model', font: { size: 20, color: '#2c3e50' } },
+                        tickangle: -40,
+                        tickfont: { size: 14 },
+                    },
+                    yaxis: {
+                        title: { text: 'Number of Detections', font: { size: 20, color: '#2c3e50' } },
+                        range: [0, axisMax],
+                        tickfont: { size: 16 },
+                    },
+                    margin: { t: 40, l: 80, r: 10, b: 120 },
+                    plot_bgcolor: 'white',
+                    paper_bgcolor: 'white',
+                    showlegend: false,
+                });
+            }
+
+            buildHistogram('detectionCountAll', 'Detections (All)', models, detectionsAll, gtAll, yAxisMax);
+            buildHistogram('detectionCountValid', 'Detections (>150ms)', models, detectionsValid, gtValid, yAxisMax);
+        }
+
+        function collectTimeEfficiencyData(threshold = 0.5) {
+            if (!rawData) return [];
+            const models = getOrderedModels();
+            return models.map(model => {
+                const entry = rawData[model]?.[threshold] ?? {};
+                const dtAllRaw = entry.dt_all;
+                const dtValidCandidate = getValidDetectionCount(entry);
+                const totalTimeRaw = entry.total_time;
+                const rtfRaw = entry.rtf;
+                const dtAll = Number(dtAllRaw);
+                const dtValid = dtValidCandidate === null ? null : Number(dtValidCandidate);
+                const totalTime = Number(totalTimeRaw);
+                const rtf = Number(rtfRaw);
+                return {
+                    model,
+                    dtAll: Number.isFinite(dtAll) ? dtAll : null,
+                    dtValid: Number.isFinite(dtValid) ? dtValid : null,
+                    totalTime: Number.isFinite(totalTime) ? totalTime : null,
+                    rtf: Number.isFinite(rtf) ? rtf : null
+                };
+            });
+        }
+
+        function getTimeEfficiencyDomains(threshold = 0.5) {
+            const data = collectTimeEfficiencyData(threshold);
+            const xValues = [];
+            const yValues = [];
+            const rtfValues = [];
+            data.forEach(item => {
+                if (item.dtAll !== null) xValues.push(item.dtAll);
+                if (item.dtValid !== null) xValues.push(item.dtValid);
+                if (item.totalTime !== null) yValues.push(item.totalTime);
+                if (item.rtf !== null) rtfValues.push(item.rtf);
+            });
+            const xMax = xValues.length ? Math.max(...xValues) : 1;
+            const yMax = yValues.length ? Math.max(...yValues) : 1;
+            const rtfMin = rtfValues.length ? Math.min(...rtfValues) : 0;
+            const rtfMax = rtfValues.length ? Math.max(...rtfValues) : 1;
+            return {
+                data,
+                xMax: xMax > 0 ? xMax * 1.1 : 1,
+                yMax: yMax > 0 ? yMax * 1.1 : 1,
+                rtfMin,
+                rtfMax
+            };
+        }
+
+        function scaleRtfToMarkerSize(rtf, rtfMin, rtfMax) {
+            const sizeMin = 30;
+            const sizeMax = 80;
+            if (!Number.isFinite(rtf)) return sizeMin;
+            if (rtfMax === rtfMin) {
+                return (sizeMin + sizeMax) / 2;
+            }
+            const normalized = Math.max(0, (rtf - rtfMin) / (rtfMax - rtfMin));
+            return sizeMin + Math.sqrt(normalized) * (sizeMax - sizeMin);
+        }
+
+        function createTimeEfficiencyScatterAll(threshold = 0.5, showLegend = true) {
+            if (!rawData) return;
+            const { data, xMax, yMax, rtfMin, rtfMax } = getTimeEfficiencyDomains(threshold);
+            const traces = data
+                .filter(d => d.dtAll !== null && d.totalTime !== null)
+                .map(d => ({
+                    x: [d.dtAll],
+                    y: [d.totalTime],
+                    mode: 'markers',
+                    type: 'scatter',
+                    name: d.model,
+                    marker: {
+                        color: modelColors[d.model] || '#888',
+                        symbol: getMarkerSymbol(d.model),
+                        size: scaleRtfToMarkerSize(d.rtf, rtfMin, rtfMax),
+                        sizemode: 'diameter',
+                        line: { color: '#fff', width: 2 }
+                    },
+                    customdata: [[d.rtf]],
+                    hovertemplate:
+                        '<b>' + d.model + '</b><br>' +
+                        'Detections: %{x:,.0f}<br>' +
+                        'Total Time: %{y:.2f}s<br>' +
+                        'RTF: %{customdata[0]:.3f}<br>' +
+                        '<extra></extra>'
+                }));
+
+            const layout = {
+                xaxis: {
+                    title: { text: 'Number of Detections', font: { size: 20, color: '#2c3e50' } },
+                    range: [0, xMax],
+                    tickfont: { size: 16 }
+                },
+                yaxis: {
+                    title: { text: 'Total Inference Time (s)', font: { size: 20, color: '#2c3e50' } },
+                    range: [0, yMax],
+                    tickfont: { size: 16 }
+                },
+                legend: {
+                    x: 0.02,
+                    y: 0.98,
+                    xanchor: 'left',
+                    yanchor: 'top',
+                    bgcolor: 'rgba(255,255,255,0.85)',
+                    bordercolor: '#2c3e50',
+                    borderwidth: 1
+                },
+                margin: { t: 40, l: 80, r: 30, b: 70 },
+                plot_bgcolor: 'white',
+                paper_bgcolor: 'white',
+                showlegend: showLegend
+            };
+
+            const config = {
+                displayModeBar: true,
+                modeBarButtonsToRemove: ['select2d', 'lasso2d', 'autoScale2d'],
+                displaylogo: false
+            };
+
+            Plotly.newPlot('timeEfficiencyAll', traces, layout, config);
+        }
+
+        function createTimeEfficiencyScatterValid(threshold = 0.5, showLegend = true) {
+            if (!rawData) return;
+            const { data, xMax, yMax, rtfMin, rtfMax } = getTimeEfficiencyDomains(threshold);
+            const traces = data
+                .filter(d => d.dtValid !== null && d.totalTime !== null)
+                .map(d => ({
+                    x: [d.dtValid],
+                    y: [d.totalTime],
+                    mode: 'markers',
+                    type: 'scatter',
+                    name: d.model,
+                    marker: {
+                        color: modelColors[d.model] || '#888',
+                        symbol: getMarkerSymbol(d.model),
+                        size: scaleRtfToMarkerSize(d.rtf, rtfMin, rtfMax),
+                        sizemode: 'diameter',
+                        line: { color: '#fff', width: 2 }
+                    },
+                    customdata: [[d.rtf]],
+                    hovertemplate:
+                        '<b>' + d.model + '</b><br>' +
+                        'Detections (>150ms): %{x:,.0f}<br>' +
+                        'Total Time: %{y:.2f}s<br>' +
+                        'RTF: %{customdata[0]:.3f}<br>' +
+                        '<extra></extra>'
+                }));
+
+            const layout = {
+                xaxis: {
+                    title: { text: 'Number of Detections (>150ms)', font: { size: 20, color: '#2c3e50' } },
+                    range: [0, xMax],
+                    tickfont: { size: 16 }
+                },
+                yaxis: {
+                    title: { text: 'Total Inference Time (s)', font: { size: 20, color: '#2c3e50' } },
+                    range: [0, yMax],
+                    tickfont: { size: 16 }
+                },
+                legend: {
+                    x: 0.02,
+                    y: 0.98,
+                    xanchor: 'left',
+                    yanchor: 'top',
+                    bgcolor: 'rgba(255,255,255,0.85)',
+                    bordercolor: '#2c3e50',
+                    borderwidth: 1
+                },
+                margin: { t: 40, l: 80, r: 30, b: 70 },
+                plot_bgcolor: 'white',
+                paper_bgcolor: 'white',
+                showlegend: showLegend
+            };
+
+            const config = {
+                displayModeBar: true,
+                modeBarButtonsToRemove: ['select2d', 'lasso2d', 'autoScale2d'],
+                displaylogo: false
+            };
+
+            Plotly.newPlot('timeEfficiencyValid', traces, layout, config);
+        }
+
 
         function getCoverageFragMinMax() {
+            if (!rawData) return [0, 1];
             // Get min/max frag for both all and valid at threshold 0.5
             const models = getOrderedModels();
             const allFrag = models.map(m => rawData[m][0.5]?.frag ?? null).filter(v => v !== null);
@@ -943,6 +1433,7 @@
         }
 
         function createCoverageFragScatterAll(threshold = 0.5, showLegend = true) {
+            if (!rawData) return;
             const models = getOrderedModels();
             const coverage = models.map(m => rawData[m][threshold]?.coverage ?? null);
             const frag = models.map(m => rawData[m][threshold]?.frag ?? null);
@@ -975,6 +1466,7 @@
                 name: model,
                 marker: {
                     color: modelColors[model] || '#888',
+                    symbol: getMarkerSymbol(model),
                     size: sizes[i],
                     line: { color: '#fff', width: 2 }
                 },
@@ -1003,6 +1495,7 @@
             });
         }
         function createCoverageFragScatterValid(threshold = 0.5, showLegend = true) {
+            if (!rawData) return;
             const models = getOrderedModels();
             const coverage = models.map(m => rawData[m][threshold]?.coverage_valid ?? null);
             const frag = models.map(m => rawData[m][threshold]?.frag_valid ?? null);
@@ -1033,6 +1526,7 @@
                 name: model,
                 marker: {
                     color: modelColors[model] || '#888',
+                    symbol: getMarkerSymbol(model),
                     size: sizes[i],
                     line: { color: '#fff', width: 2 }
                 },
@@ -1061,11 +1555,9 @@
             });
         }
 
-        // Create coverage vs fragmentation scatter plot
-        createCoverageFragScatterAll(0.5);
-        createCoverageFragScatterValid(0.5);
 
         function getOrderedModels() {
+            if (!rawData) return [];
             const models = Object.keys(rawData);
             // Remove 'SAM-Whistle' and 'DeepWhistle' from current position
             const filtered = models.filter(m => m !== 'SAM-Whistle' && m !== 'DeepWhistle');
@@ -1075,6 +1567,7 @@
         }
 
         function createRadarAll(threshold = 0.5, showLegend = true) {
+            if (!rawData) return;
             const models = getOrderedModels();
             const metrics = ['precision', 'recall', 'f1', 'coverage', 'frag'];
             const metricLabels = ['Precision', 'Recall', 'F1', 'Coverage', 'Fragmentation'];
@@ -1097,7 +1590,7 @@
                     theta: thetaValues,
                     fill: 'toself',
                     name: model,
-                    marker: { color: modelColors[model] || '#888' },
+                    marker: { color: modelColors[model] || '#888', symbol: getMarkerSymbol(model) },
                     line: { color: modelColors[model] || '#888', width: 2 },
                     fillcolor: (modelColors[model] || '#888') + '20'
                 };
@@ -1134,6 +1627,7 @@
             });
         }
         function createRadarValid(threshold = 0.5, showLegend = true) {
+            if (!rawData) return;
             const models = getOrderedModels();
             const metrics = ['precision_valid', 'recall_valid', 'f1_valid', 'coverage_valid', 'frag_valid'];
             const metricLabels = ['Precision', 'Recall', 'F1', 'Coverage', 'Fragmentation'];
@@ -1155,7 +1649,7 @@
                     theta: thetaValues,
                     fill: 'toself',
                     name: model,
-                    marker: { color: modelColors[model] || '#888' },
+                    marker: { color: modelColors[model] || '#888', symbol: getMarkerSymbol(model) },
                     line: { color: modelColors[model] || '#888', width: 2 },
                     fillcolor: (modelColors[model] || '#888') + '20'
                 };
@@ -1191,8 +1685,7 @@
                     paper_bgcolor: 'white',
                 });
         }
-        createRadarAll(0.5);
-        createRadarValid(0.5);
+        loadData();
     </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </body>

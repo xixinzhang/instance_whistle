@@ -151,12 +151,12 @@ class WhistleVisualizer(Visualizer):
                 colors = []
                 for _ in range(n):
                     h = np.random.rand()                    # random hue (0–1)
-                    s = 0.7 + 0.3 * np.random.rand()        # high saturation (avoid gray)
-                    v = 0.7 + 0.3 * np.random.rand()        # bright (avoid dark)
+                    s = 0.8 + 0.2 * np.random.rand()        # high saturation (avoid gray)
+                    v = 0.8 + 0.2 * np.random.rand()        # bright (avoid dark)
                     rgb = np.array(colorsys.hsv_to_rgb(h, s, v))
                     colors.append((rgb * 255).astype(np.uint8))
                 return colors
-            
+
             # colors = [jitter_color(mask_palette[label]) for label in labels]
             # colors = [((np.random.random(3)*0.6+0.4)*255).astype(np.uint8) for label in labels]
             # cmap = plt.cm.get_cmap('tab10', len(labels))
