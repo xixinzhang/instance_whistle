@@ -5,57 +5,7 @@ import os
 
 from whistle_prompter.utils.annotation import load_tonal_reader
 
-
-#######################################
-# Compute data stats for original data
-#######################################
-origin_data_dir = "data/whale_whistle"
-origin_data_stats = {}
-total_file_count = 0
-total_duration = 0.0
-total_whistle_count = 0
-for subdir in os.listdir(origin_data_dir):
-    if os.path.isfile(subdir):
-        continue
-    dirpath = os.path.join(origin_data_dir, subdir)
-    dir_name = os.path.basename(dirpath)
-    file_count = 0
-    duration = 0.0
-    stats = 0
-    for fname in os.listdir(dirpath):
-        if not fname.lower().endswith(".wav"):
-            continue
-        stem = os.path.splitext(fname)[0]
-        y, sr = librosa.load(os.path.join(dirpath, fname))
-        annos = load_tonal_reader(os.path.join(dirpath, f"{stem}.bin"))
-        file_count += 1
-        duration += len(y)/sr
-        stats += len(annos)
-    
-    total_file_count += file_count
-    total_duration += duration
-    total_whistle_count += stats
-    origin_data_stats[dir_name] ={
-        "count": file_count,
-        "total_duration": duration,
-        "whistle_count": stats
-    }
-
-origin_data_stats['total'] = {
-    "count": total_file_count,
-    "total_duration": total_duration,
-    "whistle_count": total_whistle_count
-}
-
-print("Original Data Stats:")
-for category, stats in origin_data_stats.items():
-    print(f"  {category}: {stats['count']} files, {stats['total_duration']/60:.2f} minutes")
-    print(f"    Whistle Count: {stats['whistle_count']}")
-
-#######################################
-# Compute data stats for Refined  data
-#######################################
-meta = {
+refined_meta = {
     "common": [
         "QX-Dc-CC0604-TAT25-060413-215524",
         "QX-Dc-CC0604-TAT25-060413-220000",
@@ -79,11 +29,12 @@ meta = {
         "Qx-Tt-SCI0608-N1-060814-123433",
         "Qx-Tt-SCI0608-Ziph-060819-072558",
         "Qx-Tt-SCI0608-Ziph-060819-074737",
-        "palmyra092007FS192-070924-205305",
-        "palmyra092007FS192-070924-205730",
-        "palmyra092007FS192-071012-010614",
-        "palmyra092007FS192-071012-012000",
-        "palmyra102006-061030-230343_4"
+        # remove palmyra data for cross domain setting
+        # "palmyra092007FS192-070924-205305",
+        # "palmyra092007FS192-070924-205730",
+        # "palmyra092007FS192-071012-010614",
+        # "palmyra092007FS192-071012-012000",
+        # "palmyra102006-061030-230343_4"
     ],
     "melon-headed": [
         "palmyra092007FS192-070925-023000",
@@ -108,6 +59,89 @@ meta = {
     ]
 }
 
+#######################################
+# Compute data stats for original data
+#######################################
+origin_data_dir = "data/whale_whistle"
+origin_data_stats = {}
+origin_data_stats_refined = {}
+total_file_count = 0
+total_file_count_refined = 0
+total_duration = 0.0
+total_duration_refined = 0.0
+total_whistle_count = 0
+total_whistle_count_refined = 0
+for subdir in os.listdir(origin_data_dir):
+    if os.path.isfile(subdir):
+        continue
+    dirpath = os.path.join(origin_data_dir, subdir)
+    dir_name = os.path.basename(dirpath)
+    file_count = 0
+    duration = 0.0
+    file_count_refined = 0
+    duration_refined = 0.0
+    stats = 0
+    stats_refined = 0
+    for fname in os.listdir(dirpath):
+        if not fname.lower().endswith(".wav"):
+            continue
+        stem = os.path.splitext(fname)[0]
+        y, sr = librosa.load(os.path.join(dirpath, fname))
+        annos = load_tonal_reader(os.path.join(dirpath, f"{stem}.bin"))
+        file_count += 1
+        duration += len(y)/sr
+        stats += len(annos)
+        if stem in refined_meta.get(dir_name, []):
+            file_count_refined += 1
+            duration_refined += len(y)/sr
+            stats_refined += len(annos)
+    
+    total_file_count += file_count
+    total_duration += duration
+    total_whistle_count += stats
+    origin_data_stats[dir_name] ={
+        "count": file_count,
+        "total_duration": duration,
+        "whistle_count": stats
+    }
+    if dir_name in refined_meta:
+        total_file_count_refined += file_count_refined
+        total_duration_refined += duration_refined
+        total_whistle_count_refined += stats_refined
+        origin_data_stats_refined[dir_name] ={
+            "count": file_count_refined,
+            "total_duration": duration_refined,
+            "whistle_count": stats_refined
+        }
+
+origin_data_stats['total'] = {
+    "count": total_file_count,
+    "total_duration": total_duration,
+    "whistle_count": total_whistle_count
+}
+origin_data_stats_refined['total'] = {
+    "count": total_file_count_refined,
+    "total_duration": total_duration_refined,
+    "whistle_count": total_whistle_count_refined
+}
+
+print("Original Data Stats:")
+for category, stats in origin_data_stats.items():
+    print(f"  {category}: {stats['count']} files, {stats['total_duration']/60:.2f} minutes")
+    print(f"    Whistle Count: {stats['whistle_count']}")
+print(f"total duration: {origin_data_stats['total']['total_duration']/60:.2f} minutes")
+print(f"totoal whistle count: {origin_data_stats['total']['whistle_count']}\n")
+print("\nRefined Original Data Stats:")
+for category, stats in origin_data_stats_refined.items():
+    print(f"  {category}: {stats['count']} files, {stats['total_duration']/60:.2f} minutes")
+    print(f"    Whistle Count: {stats['whistle_count']}")
+print(f"total duration: {origin_data_stats_refined['total']['total_duration']/60:.2f} minutes")
+print(f"totoal whistle count: {origin_data_stats_refined['total']['whistle_count']}\n")
+
+#######################################
+# Compute data stats for Refined  data
+#######################################
+
 refined_anno_dir = "data/cross/anno_refined"
 refined_data_stats = {}
 total_file_count = 0
@@ -125,7 +159,7 @@ for subdir in os.listdir(origin_data_dir):
         if not fname.lower().endswith(".wav"):
             continue
         stem = os.path.splitext(fname)[0]
-        if stem not in meta[dir_name]:
+        if stem not in refined_meta[dir_name]:
             continue
         y, sr = librosa.load(os.path.join(dirpath, fname))
         anno_path = os.path.join(refined_anno_dir, f"{stem}.bin")
@@ -147,19 +181,19 @@ for subdir in os.listdir(origin_data_dir):
 
 refined_data_stats['total'] = {
     "palmyra": {
-        "file": sum([refined_data_stats[cat]["palmyra"]["file"] for cat in meta.keys()]),
-        "count": sum([refined_data_stats[cat]["palmyra"]["count"] for cat in meta.keys()]),
-        "duration": sum([refined_data_stats[cat]["palmyra"]["duration"] for cat in meta.keys()]),
+        "file": sum([refined_data_stats[cat]["palmyra"]["file"] for cat in refined_meta.keys()]),
+        "count": sum([refined_data_stats[cat]["palmyra"]["count"] for cat in refined_meta.keys()]),
+        "duration": sum([refined_data_stats[cat]["palmyra"]["duration"] for cat in refined_meta.keys()]),
     },
     "SCB": {
-        "file": sum([refined_data_stats[cat]["SCB"]["file"] for cat in meta.keys()]),
-        "count": sum([refined_data_stats[cat]["SCB"]["count"] for cat in meta.keys()]),
-        "duration": sum([refined_data_stats[cat]["SCB"]["duration"] for cat in meta.keys()]),
+        "file": sum([refined_data_stats[cat]["SCB"]["file"] for cat in refined_meta.keys()]),
+        "count": sum([refined_data_stats[cat]["SCB"]["count"] for cat in refined_meta.keys()]),
+        "duration": sum([refined_data_stats[cat]["SCB"]["duration"] for cat in refined_meta.keys()]),
     },
     "total": {
-        "file": sum([refined_data_stats[cat]['total']['file'] for cat in meta.keys()]),
-        "count": sum([refined_data_stats[cat]['total']['count'] for cat in meta.keys()]),
-        "duration": sum([refined_data_stats[cat]['total']['duration'] for cat in meta.keys()]),
+        "file": sum([refined_data_stats[cat]['total']['file'] for cat in refined_meta.keys()]),
+        "count": sum([refined_data_stats[cat]['total']['count'] for cat in refined_meta.keys()]),
+        "duration": sum([refined_data_stats[cat]['total']['duration'] for cat in refined_meta.keys()]),
     }
 }
 
@@ -169,3 +203,5 @@ for category, stats in refined_data_stats.items():
     print(f"    Whistle Count: {stats['total']['count']}")
     print(f"    SCB - Files: {stats['SCB']['file']}, Whistle Count: {stats['SCB']['count']}, Duration: {stats['SCB']['duration']} seconds = {stats['SCB']['duration']/60:.2f} minutes")
     print(f"    Palmyra - Files: {stats['palmyra']['file']}, Whistle Count: {stats['palmyra']['count']}, Duration: {stats['palmyra']['duration']} seconds = {stats['palmyra']['duration']/60:.2f} minutes")
+print(f"total duration: {refined_data_stats['total']['total']['duration']/60:.2f} minutes")
+print(f"totoal whistle count: {refined_data_stats['total']['total']['count']}\n")

@@ -160,6 +160,7 @@
             border-radius: 4px;
             box-shadow: 0 0 2px #ffc107;
         }
+
     </style>
 </head>
 
@@ -1239,7 +1240,7 @@
 
         function collectTimeEfficiencyData(threshold = 0.5) {
             if (!rawData) return [];
-            const models = getOrderedModels();
+            const models = getOrderedModels().filter(m => m !== 'Mask2Former (Swin-T) Reversed');
             return models.map(model => {
                 const entry = rawData[model]?.[threshold] ?? {};
                 const dtAllRaw = entry.dt_all;
@@ -1295,6 +1296,8 @@
             return sizeMin + Math.sqrt(normalized) * (sizeMax - sizeMin);
         }
 
+        // Bubble legend removed per request
+
         function createTimeEfficiencyScatterAll(threshold = 0.5, showLegend = true) {
             if (!rawData) return;
             const { data, xMax, yMax, rtfMin, rtfMax } = getTimeEfficiencyDomains(threshold);
@@ -1308,7 +1311,6 @@
                     name: d.model,
                     marker: {
                         color: modelColors[d.model] || '#888',
-                        symbol: getMarkerSymbol(d.model),
                         size: scaleRtfToMarkerSize(d.rtf, rtfMin, rtfMax),
                         sizemode: 'diameter',
                         line: { color: '#fff', width: 2 }
@@ -1370,7 +1372,6 @@
                     name: d.model,
                     marker: {
                         color: modelColors[d.model] || '#888',
-                        symbol: getMarkerSymbol(d.model),
                         size: scaleRtfToMarkerSize(d.rtf, rtfMin, rtfMax),
                         sizemode: 'diameter',
                         line: { color: '#fff', width: 2 }
@@ -1466,7 +1467,6 @@
                 name: model,
                 marker: {
                     color: modelColors[model] || '#888',
-                    symbol: getMarkerSymbol(model),
                     size: sizes[i],
                     line: { color: '#fff', width: 2 }
                 },
@@ -1526,7 +1526,6 @@
                 name: model,
                 marker: {
                     color: modelColors[model] || '#888',
-                    symbol: getMarkerSymbol(model),
                     size: sizes[i],
                     line: { color: '#fff', width: 2 }
                 },
@@ -1590,7 +1589,7 @@
                     theta: thetaValues,
                     fill: 'toself',
                     name: model,
-                    marker: { color: modelColors[model] || '#888', symbol: getMarkerSymbol(model) },
+                    marker: { color: modelColors[model] || '#888' },
                     line: { color: modelColors[model] || '#888', width: 2 },
                     fillcolor: (modelColors[model] || '#888') + '20'
                 };
@@ -1649,7 +1648,7 @@
                     theta: thetaValues,
                     fill: 'toself',
                     name: model,
-                    marker: { color: modelColors[model] || '#888', symbol: getMarkerSymbol(model) },
+                    marker: { color: modelColors[model] || '#888' },
                     line: { color: modelColors[model] || '#888', width: 2 },
                     fillcolor: (modelColors[model] || '#888') + '20'
                 };
