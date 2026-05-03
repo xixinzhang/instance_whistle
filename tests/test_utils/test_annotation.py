@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from whistle_prompter import utils
+from instance_whistle import utils
 
 if __name__ == "__main__":
     with open('data/meta.json') as f:

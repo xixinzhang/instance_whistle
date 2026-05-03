@@ -14,7 +14,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from whistle_prompter import utils
+from instance_whistle import utils
 
 
 def audios_to_segments_dict(
@@ -62,7 +62,8 @@ def save_specs_img(
     line_width,
     cmap: Optional[str],
     filter_empty_gt: bool = True,
-    anno="anno",
+    bin_file: Optional[str] = None,
+    model: str = None,
 ):
     """Save spectrogram segment images from audio files to the directory with annotations in COCO format
 
@@ -75,16 +76,11 @@ def save_specs_img(
     annotations = []
     images = []
 
-    # clear old data
-    if os.path.exists(save_dir):
-        shutil.rmtree(save_dir)
-    os.makedirs(osp.join(save_dir, "data"), exist_ok=True)
 
     for name, segments in segments_dict.items():
         dirname, stem = name.split("/")
         print(f"Saving {stem} to {save_dir}")
 
-        bin_file = Path(f"data/cross/{anno}/{stem}.bin")
         annos = utils.load_tonal_reader(bin_file)
         for start_frame, segment in segments.items():
             # annotations
@@ -130,20 +126,10 @@ def save_specs_img(
             )
             img_cnt += 1
 
-            # Save the image
-            if cmap is not None:
-                segment = utils.apply_colormap(segment, cmap)
-            else:
-                segment = np.stack([segment] * 3, axis=-1)  # F, N_FRAMES, 3)
-            segment = (segment * 255).astype(np.uint8)
-            segment = cv2.cvtColor(segment, cv2.COLOR_RGB2BGR)
-            cv2.imwrite(f"{save_dir}/data/{spec_img_name}", segment)
-            print(f"Saved {save_dir}/data/{spec_img_name}")
-
     # Save the annotations
     category = dict(id=1, name="whistle")
     coco_json = dict(images=images, annotations=annotations, categories=[category])
-    with open(f"{save_dir}/labels.json", "w") as f:
+    with open(f"{save_dir}/labels_{model}.json", "w") as f:
         json.dump(coco_json, f)
         print(f"Saved {save_dir}/labels.json")
 
@@ -227,37 +213,26 @@ if __name__ == "__main__":
     parser.add_argument("--meta", type=str, default="data/meta_cross.yaml")
     parser.add_argument("--anno_dir", type=str, default="anno_refined")
     parser.add_argument("--audio", type=str, default="audio")
-    parser.add_argument("--output_dir", type=str, default="coco")
+    parser.add_argument("--output_dir", type=str, default="mmdetection/outputs/qualitative_bins")
     parser.add_argument("--cmap", type=str, default=None)
     parser.add_argument("--line_width", type=float, default=3)
     parser.add_argument("--overlap", type=float, default=0)
+    parser.add_argument("--bin", type=str, default=None)
+    parser.add_argument("--model", type=str, default=None)
     args = parser.parse_args()
 
-    with open(args.meta) as f:
-        meta = yaml.safe_load(f)
-    dirname = os.path.dirname(args.meta)
-    print(f"Load meta from {dirname}")
 
-    test_filenames = []
-    train_filenames = []
-    for stem in meta["test"]:
-        test_filenames.append(f"{dirname}/{args.audio}/{stem}.wav")
-    for stem in meta["train"]:
-        train_filenames.append(f"{dirname}/{args.audio}/{stem}.wav")
+    filenames = [args.audio]
+    os.makedirs(args.output_dir, exist_ok=True)
 
-    for filenames, split in zip(
-        [train_filenames, test_filenames], ["train", "test"]
-    ):
-        print(f"Preparing {split} set with {len(filenames)} audio files")
-        output_dir = osp.join(dirname, args.output_dir, split)
-        os.makedirs(output_dir, exist_ok=True)
-        segments_dict = audios_to_segments_dict(filenames)
-        print(segments_dict.keys())
-        save_specs_img(
-            segments_dict,
-            output_dir,
-            filter_empty_gt=False,
-            cmap=args.cmap,
-            line_width=args.line_width,
-            anno=args.anno_dir,
-        )
+    segments_dict = audios_to_segments_dict(filenames)
+    print(segments_dict.keys())
+    save_specs_img(
+        segments_dict,
+        args.output_dir,
+        filter_empty_gt=False,
+        cmap=args.cmap,
+        line_width=args.line_width,
+        bin_file=args.bin,
+        model=args.model,
+    )

@@ -29,6 +29,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('file', type=Path, help='Path to the image file')
 parser.add_argument('--out_dir', type=Path, default=Path('outputs/pred_vis'), help='Path to the output directory')
 parser.add_argument("--model", type=str, default=None)
+parser.add_argument("--ann_dir", type=str, default="mmdetection/outputs/qualitative_bins", help="Directory containing labels_{model}.json")
 args = parser.parse_args()
 
 # Create output directory if it doesn't exist
@@ -49,7 +50,7 @@ x_labels = np.around(np.linspace(0, 3, 6), decimals=2)
 y_ticks = np.linspace(0, img.shape[0], num=7, endpoint=True, dtype=int)
 y_labels = np.around(np.linspace(0, 96, 7)[::-1], decimals=2)
 
-ann_file =  Path(f"mmdetection/outputs/qualitative_bins/labels_{args.model}.json")
+ann_file =  Path(f"{args.ann_dir}/labels_{args.model}.json")
 val_coco = COCO(ann_file.as_posix())
 
 for img_id, img in val_coco.imgs.items():

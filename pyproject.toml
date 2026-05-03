@@ -3,7 +3,7 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "whistle_prompter"
+name = "instance_whistle"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -20,4 +20,4 @@ dependencies = [
 ]
 
 [tool.setuptools]
-packages = ["whistle_prompter"]
+packages = ["instance_whistle"]

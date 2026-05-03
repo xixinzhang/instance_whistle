@@ -8,7 +8,7 @@ from matplotlib.patches import Polygon
 from matplotlib.path import Path
 from skimage.draw import polygon2mask
 
-from whistle_prompter.datasets.prepare_spec_img import *
+from instance_whistle.datasets.prepare_spec_img import *
 
 
 def polygon_anno_to_mask(img_path, annotations_data, output_path=None, mask_color=(1, 0, 0), alpha=0.5):

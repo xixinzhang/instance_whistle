@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from whistle_prompter import utils
-from whistle_prompter.datasets.prepare_spec_img import *
+from instance_whistle import utils
+from instance_whistle.datasets.prepare_spec_img import *
 
 
 def test_spec_extraction(stem:str):

@@ -8,6 +8,7 @@ mmdetection/checkpoints
 *.pdf
 __pycache__
 *.egg-info
+.vscode/
 *.png
 *.grd
-whistle_prompter/visualization/experiment_results_full.json
+instance_whistle/visualization/experiment_results_full.json

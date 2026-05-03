@@ -3,7 +3,7 @@ import os
 import wave
 import contextlib
 import argparse
-from whistle_prompter.utils.annotation import load_tonal_reader
+from instance_whistle.utils.annotation import load_tonal_reader
 
 
 def get_wav_stats_and_stems(root_folder, exclude_stems=None):
@@ -39,7 +39,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "folder",
         type=str,
-        default=os.path.expanduser("~") + "/Desktop/projects/whistle_prompter/data/dclde/audio",
+        default=os.path.expanduser("~") + "/Desktop/projects/instance_whistle/data/dclde/audio",
         help="Target folder to search for .wav files."
     )
     parser.add_argument(

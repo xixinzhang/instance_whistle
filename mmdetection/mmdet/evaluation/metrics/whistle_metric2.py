@@ -32,8 +32,8 @@ from tqdm import tqdm
 
 import pycocotools.mask as maskUtils
 from rich import print as rprint
-from whistle_prompter import utils
-from whistle_prompter.utils.write_binary import writeTimeFrequencyBinary, writeContoursBinary
+from instance_whistle import utils
+from instance_whistle.utils.write_binary import writeTimeFrequencyBinary, writeContoursBinary
 import os
 # FIRST convert warnings to exceptions
 import warnings

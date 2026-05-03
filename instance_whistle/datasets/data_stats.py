@@ -3,7 +3,7 @@ import numpy as np
 import librosa
 import os
 
-from whistle_prompter.utils.annotation import load_tonal_reader
+from instance_whistle.utils.annotation import load_tonal_reader
 
 refined_meta = {
     "common": [

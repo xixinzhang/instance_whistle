@@ -25,12 +25,12 @@ from rich import print as rprint
 
 
 meta1 = yaml.safe_load(open('/home/asher/Desktop/projects/instance_whistle/data/cross/meta.yaml'))
-# meta2 = yaml.safe_load(open('/home/xzhang3906/Desktop/projects/whistle_prompter/meta.yaml'))
+# meta2 = yaml.safe_load(open('/home/xzhang3906/Desktop/projects/instance_whistle/meta.yaml'))
 # for k in meta1['test']:
 #     if k not in meta2['test']:
 #         print(k)
 ############## Check the audio duration and annotation length ##############
-from whistle_prompter import utils
+from instance_whistle import utils
 for stem in meta1['test']:
     bin_path = os.path.join('data/cross/anno', f"{stem}.bin")
     annots = utils.load_annotation(bin_path)
@@ -87,7 +87,7 @@ for stem in meta1['train']:
 
 
 # ############# Check Db stats ##############
-# from whistle_prompter.utils.audio import *
+# from instance_whistle.utils.audio import *
 # # for stem in meta1['train']+meta1['test']:
 # for stem in ['QX-Dc-CC0604-TAT25-060413-215524']:
 #     audio_path = os.path.join('data/cross/audio', f"{stem}.wav")
